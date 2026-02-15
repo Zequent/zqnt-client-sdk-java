@@ -41,15 +41,17 @@ Verwende diese Checkliste vor der Veröffentlichung der SDK als öffentlich.
 - [ ] Branching-Strategie definiert (main/develop/feature branches)
 
 ### Build & Release
-- [ ] Maven GPG-Plugin konfiguriert
 - [ ] Maven Source & Javadoc Plugin konfiguriert
 - [ ] pom.xml vollständig ausgefüllt:
   - [ ] GroupId, ArtifactId, Version
   - [ ] Name, Description
   - [ ] URL, License, Developers, SCM
-  - [ ] DistributionManagement konfiguriert
+  - [ ] DistributionManagement konfiguriert (GitHub Packages)
+  - [ ] Repositories konfiguriert (GitHub Packages)
 - [ ] Version-Nummer in pom.xml aktuell
 - [ ] Tag in Git erstellt (v1.0.0 format)
+- [ ] GitHub Personal Access Token (PAT) mit `write:packages` erstellt
+- [ ] Maven credentials in ~/.m2/settings.xml konfiguriert
 
 ### POM Configuration Verification
 ```bash
@@ -84,19 +86,35 @@ Verwende diese Checkliste vor der Veröffentlichung der SDK als öffentlich.
    git push origin main --tags
    ```
 
-5. [ ] **Zu Maven Central deployen**
+5. [ ] **Zu GitHub Packages deployen**
    ```bash
    ./mvnw clean deploy
    ```
+   Falls Fehler mit Credentials:
+   ```bash
+   # Setting.xml prüfen
+   cat ~/.m2/settings.xml
+   # GitHub Token prüfen (gültig?)
+   ```
 
-6. [ ] **Staging Repository freigeben**
-   - Login zu https://s01.oss.sonatype.org
-   - Repository "Close" → "Release"
-
-7. [ ] **Publication verifizieren**
-   - [ ] Nach 30min in Maven Central sichtbar
-   - [ ] `mvn dependency:copy` funktioniert mit neuer Version
-   - [ ] GitHub Release erstellen mit Changelog
+6. [ ] **Publication verifizieren**
+   - [ ] Nach 1-2 Minuten auf GitHub sichtbar
+   - [ ] https://github.com/Zequent/zequent-framework/packages → java-client-sdk
+   - [ ] Dependency in Test-Projekt hinzufügen
+   ```xml
+   <repositories>
+       <repository>
+           <id>github</id>
+           <url>https://maven.pkg.github.com/Zequent/zequent-framework</url>
+       </repository>
+   </repositories>
+   <dependency>
+       <groupId>com.zequent.framework.client.sdk</groupId>
+       <artifactId>java-client-sdk</artifactId>
+       <version>1.0.0</version>
+   </dependency>
+   ```
+   - [ ] `mvn dependency:resolve` funktioniert
 
 ## 🔍 Häufige Fehler vermeiden
 
@@ -116,22 +134,35 @@ Verwende diese Checkliste vor der Veröffentlichung der SDK als öffentlich.
     <groupId>com.zequent.framework</groupId>
     <artifactId>utils</artifactId>
     <optional>true</optional>
-</dependency>
+### ❌ Fehler: Falsche Repository URL
+**Fehler**: Maven kann Packages nicht finden
+```xml
+<!-- FALSCH -->
+<url>https://maven.pkg.github.com</url>
+
+<!-- RICHTIG -->
+<url>https://maven.pkg.github.com/Zequent/zequent-framework</url>
 ```
 
-### ❌ Fehler: Interne URLs/Konfiguration in Code
-**Fehler**: Hardcodierte interne IPs oder Hosts
-```java
-// FALSCH - nie commiten!
-String serviceUrl = "http://internal-zequent-server:8080";
-```
-**Lösung**: Konfigurierbar machen
-```java
-// RICHTIG
-@ConfigProperty(name = "zequent.service.url")
-String serviceUrl;
-```
+### ❌ Fehler: GitHub Token abgelaufen/ungültig
+**Deploy schlägt fehl**: HTTP 401 Unauthorized
+**Lösung**:
+1. GitHub Settings → Developer Settings → Tokens prüfen
+2. Token gültig und `write:packages` scope aktiv?
+3. Neuen Token erstellen falls nötig
+4. Token in `~/.m2/settings.xml` aktualisieren
 
+### ❌ Fehler: Keine Quellen/Javadoc JAR
+**Deploy schlägt fehl**: GitHub Packages verlangt Source + Javadoc
+**Lösung**: Plugins in build konfiguriert (bereits in pom.xml gemacht)
+
+### ❌ Fehler: Falsche groupId/artifactId
+**Fehler**: Kann nicht deployen zu namespace
+```xml
+<!-- Muss mit Repo-Namespace matchen -->
+<groupId>com.zequent.framework.client.sdk</groupId>
+<artifactId>java-client-sdk</artifactId>
+```
 ### ❌ Fehler: Keine Quellen/Javadoc JAR
 **Deploy schlägt fehl**: Maven Central verlangt Source + Javadoc
 **Lösung**: Plugins in build konfigurieren (bereits in pom.xml gemacht)

@@ -34,6 +34,8 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <quarkus.platform.version>3.30.8</quarkus.platform.version>
+        <compiler-plugin.version>3.12.1</compiler-plugin.version>
+        <surefire-plugin.version>3.2.5</surefire-plugin.version>
     </properties>
 
     <dependencies>
@@ -188,24 +190,9 @@
                 </executions>
             </plugin>
 
-            <!-- GPG Sign Artifacts (required for Maven Central) -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-gpg-plugin</artifactId>
-                <version>3.1.0</version>
-                <executions>
-                    <execution>
-                        <id>sign-artifacts</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>sign</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            
             <!-- Jandex for faster CDI bean discovery (optional, helps Quarkus customers) -->
-            <plugin>
+            <!-- DISABLED: Not required for GitHub Packages -->
+            <!-- <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>
                 <version>3.1.2</version>
@@ -217,7 +204,7 @@
                         </goals>
                     </execution>
                 </executions>
-            </plugin>
+            </plugin> -->
 
             <!-- Standard Maven compiler -->
             <plugin>
@@ -241,12 +228,12 @@
         <repository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zequent-framework</url>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-client-sdk-java</url>
         </repository>
         <snapshotRepository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zequent-framework</url>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-client-sdk-java</url>
         </snapshotRepository>
     </distributionManagement>
 
