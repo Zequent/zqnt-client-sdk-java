@@ -9,9 +9,9 @@
             <!-- MUST match distributionManagement.repository.id in pom.xml -->
             <id>github</id>
 
-            <!-- Provided automatically by GitHub Actions -->
+            <!-- Provided by workflow as PACKAGES_TOKEN (can be GITHUB_TOKEN or a PAT) -->
             <username>${env.GITHUB_ACTOR}</username>
-            <password>${env.GITHUB_TOKEN}</password>
+            <password>${env.PACKAGES_TOKEN}</password>
         </server>
     </servers>
 
