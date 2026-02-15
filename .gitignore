@@ -1,0 +1,48 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.settings/
+.classpath
+.project
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# GPG keys (NEVER commit!)
+secret-key.asc
+gpg-key.txt
+
+# Test outputs
+test-results/
+*.log
+junit-*.xml
+
+# OS specific
+Thumbs.db
+.DS_Store
