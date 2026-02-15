@@ -2,12 +2,13 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.zequent.framework.client.sdk</groupId>
-    <artifactId>java-client-sdk</artifactId>
+    <artifactId>zqnt-client-sdk</artifactId>
     <version>1.0.0</version>
     <name>Zequent Java Client SDK</name>
     <description>A framework-agnostic Java client SDK for Zequent's gRPC services, designed for easy integration with any Java application.</description>
     <url>https://github.com/zequent/zqnt-client-sdk-java</url>
     
+
     <licenses>
         <license>
             <name>Apache License 2.0</name>
@@ -36,6 +37,7 @@
         <quarkus.platform.version>3.30.8</quarkus.platform.version>
         <compiler-plugin.version>3.12.1</compiler-plugin.version>
         <surefire-plugin.version>3.2.5</surefire-plugin.version>
+        <mapstruct.version>1.6.3</mapstruct.version>
     </properties>
 
     <dependencies>
@@ -119,10 +121,9 @@
 
         <!-- Zequent Framework Utils (internal dependency - optional for public) -->
         <dependency>
-            <groupId>com.zequent.framework</groupId>
-            <artifactId>utils</artifactId>
+            <groupId>com.zequent</groupId>
+            <artifactId>zqnt-utils</artifactId>
             <version>1.0.0</version>
-            <optional>true</optional>
         </dependency>
 
         <!-- Test dependencies (framework-agnostic) -->
@@ -144,6 +145,21 @@
             <version>5.11.0</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>${mapstruct.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok-mapstruct-binding</artifactId>
+            <version>0.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.42</version>
+        </dependency>
     </dependencies>
 
     <!-- GitHub Packages Repository -->
@@ -151,7 +167,7 @@
         <repository>
             <id>github</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zequent-framework</url>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-utils</url>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
@@ -180,6 +196,10 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <version>3.6.3</version>
+                <configuration>
+                    <!-- Ignore all Javadoc warnings -->
+                    <doclint>none</doclint>
+                </configuration>
                 <executions>
                     <execution>
                         <id>attach-javadocs</id>
@@ -212,6 +232,24 @@
                 <version>${compiler-plugin.version}</version>
                 <configuration>
                     <parameters>true</parameters>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.42</version>
+
+                        </path>
+                        <dependency>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok-mapstruct-binding</artifactId>
+                            <version>0.2.0</version>
+                        </dependency>
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>${mapstruct.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
 
