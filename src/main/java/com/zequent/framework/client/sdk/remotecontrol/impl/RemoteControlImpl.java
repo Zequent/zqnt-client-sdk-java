@@ -26,7 +26,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 public class RemoteControlImpl implements RemoteControl {
 
-	private final MutinyRemoteControlServiceGrpc.MutinyRemoteControlServiceStub remoteControlService;
+	private final RemoteControlServiceGrpc.RemoteControlServiceStub remoteControlService;
 	private final GrpcResilience resilience;
     private final GrpcClientConfig config;
 
@@ -41,7 +41,7 @@ public class RemoteControlImpl implements RemoteControl {
                 config.getCircuitBreakerFailureThreshold(),
                 config.getCircuitBreakerWaitDurationMillis()
         );
-		this.remoteControlService = MutinyRemoteControlServiceGrpc.newMutinyStub(channel);
+		this.remoteControlService = RemoteControlServiceGrpc.newStub(channel);
 		log.debug("RemoteControlImpl created with channel for {}:{}",
 				config.getRemoteControlConfig().getHost(),
 				config.getRemoteControlConfig().getPort());
