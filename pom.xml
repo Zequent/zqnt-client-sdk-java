@@ -210,23 +210,6 @@
                 </executions>
             </plugin>
 
-            <!-- Jandex for faster CDI bean discovery (optional, helps Quarkus customers) -->
-            <!-- DISABLED: Not required for GitHub Packages -->
-            <!-- <plugin>
-                <groupId>io.smallrye</groupId>
-                <artifactId>jandex-maven-plugin</artifactId>
-                <version>3.1.2</version>
-                <executions>
-                    <execution>
-                        <id>make-index</id>
-                        <goals>
-                            <goal>jandex</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin> -->
-
-            <!-- Standard Maven compiler -->
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${compiler-plugin.version}</version>
