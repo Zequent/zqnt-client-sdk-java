@@ -5,26 +5,37 @@ import com.zequent.framework.client.sdk.livedata.LiveData;
 import com.zequent.framework.client.sdk.mapper.LiveDataMapper;
 import com.zequent.framework.client.sdk.models.*;
 import com.zequent.framework.client.sdk.resilience.GrpcResilience;
-import com.zequent.framework.services.livedata.proto.MutinyLiveDataServiceGrpc;
+import com.zequent.framework.services.livedata.proto.LiveDataServiceGrpc;
+import com.zequent.framework.services.livedata.proto.LiveDataTelemetryResponse;
 import io.grpc.ManagedChannel;
-import io.smallrye.mutiny.subscription.Cancellable;
+import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * Internal Live Data streaming client.
+ * Internal Live Data streaming client using standard gRPC stubs.
  * NOT exposed as a CDI bean - only accessible via ZequentClient.
  * Includes built-in retry logic, circuit breaker, and reconnection handling.
+ *
+ * Performance optimizations:
+ * - Uses standard gRPC stubs (no Mutiny/Quarkus overhead)
+ * - CompletableFuture for async unary calls
+ * - StreamObserver for efficient server-streaming
+ * - Dedicated thread pool for stream handling
  */
 @Slf4j
 public class LiveDataImpl implements LiveData {
 
-	private final MutinyLiveDataServiceGrpc.MutinyLiveDataServiceStub liveDataService;
+	private final LiveDataServiceGrpc.LiveDataServiceStub asyncStub;
+	private final LiveDataServiceGrpc.LiveDataServiceFutureStub futureStub;
 	private final GrpcResilience resilience;
 	private final GrpcClientConfig config;
 	private final LiveDataMapper liveDataMapper;
+	private final ExecutorService streamExecutor;
+	private final ScheduledExecutorService timeoutScheduler;
 
 	/**
 	 * Private constructor - use create() factory method.
@@ -38,8 +49,24 @@ public class LiveDataImpl implements LiveData {
 				config.getCircuitBreakerFailureThreshold(),
 				config.getCircuitBreakerWaitDurationMillis()
 		);
-		this.liveDataService = MutinyLiveDataServiceGrpc.newMutinyStub(channel);
+		this.asyncStub = LiveDataServiceGrpc.newStub(channel);
+		this.futureStub = LiveDataServiceGrpc.newFutureStub(channel);
 		this.liveDataMapper = liveDataMapper;
+
+		// Dedicated thread pool for stream processing
+		this.streamExecutor = Executors.newCachedThreadPool(r -> {
+			Thread t = new Thread(r, "livedata-stream-handler");
+			t.setDaemon(true);
+			return t;
+		});
+
+		// Scheduler for timeout handling
+		this.timeoutScheduler = Executors.newScheduledThreadPool(1, r -> {
+			Thread t = new Thread(r, "livedata-timeout-scheduler");
+			t.setDaemon(true);
+			return t;
+		});
+
 		log.debug("LiveData created with channel for {}:{}",
 				config.getLiveDataConfig().getHost(),
 				config.getLiveDataConfig().getPort());
@@ -55,6 +82,7 @@ public class LiveDataImpl implements LiveData {
 
 	/**
 	 * Stream telemetry data with automatic reconnection on failure.
+	 * Uses standard gRPC StreamObserver for optimal performance.
 	 *
 	 * @param request The streaming request (POJO)
 	 * @param onData Callback for each data item (POJO)
@@ -64,36 +92,75 @@ public class LiveDataImpl implements LiveData {
 									Consumer<StreamTelemetryResponse> onData,
 									Consumer<Throwable> onError) {
 		var protoRequest = liveDataMapper.toProtoRequest(request);
-
 		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
-		// This is a real stream (Multi). DO NOT convert it to Uni() or you'll only get one element.
-		var stream = liveDataService.streamTelemetry(protoRequest);
+		AtomicBoolean completed = new AtomicBoolean(false);
 
-		// Apply resilience (retry + circuit breaker) via GrpcResilience for each item
-		var resilientStream = stream
-				.onItem().transformToUniAndConcatenate(item ->
-					resilience.executeWithResilience(io.smallrye.mutiny.Uni.createFrom().item(item))
-				)
-				.ifNoItem().after(java.time.Duration.ofSeconds(timeout)).fail()
-				.onItem().invoke(protoResponse -> {
-					var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
-					onData.accept(pojoResponse);
-				})
-				.onFailure().invoke(error -> {
+		// Timeout task
+		ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+			if (!completed.get()) {
+				String msg = "Stream timed out after " + timeout + " seconds";
+				log.warn(msg);
+				if (onError != null) {
+					onError.accept(new TimeoutException(msg));
+				}
+			}
+		}, timeout, TimeUnit.SECONDS);
+
+		StreamObserver<LiveDataTelemetryResponse> observer =
+			new StreamObserver<>() {
+				@Override
+				public void onNext(LiveDataTelemetryResponse protoResponse) {
+					try {
+						// Reset timeout on each received item
+						timeoutTask.cancel(false);
+
+						// Map to POJO and invoke callback
+						var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
+						onData.accept(pojoResponse);
+
+						resilience.recordSuccess();
+					} catch (Exception e) {
+						log.error("Error processing stream item: {}", e.getMessage(), e);
+						if (onError != null) {
+							onError.accept(e);
+						}
+					}
+				}
+
+				@Override
+				public void onError(Throwable error) {
+					completed.set(true);
+					timeoutTask.cancel(false);
+
 					log.error("Stream error: {}", error.getMessage(), error);
+					resilience.recordFailure(error);
+
 					if (onError != null) {
 						onError.accept(error);
 					}
-				});
+				}
 
-		// Start subscription (non-blocking)
-		Cancellable ignored = resilientStream.subscribe().with(
-				ignoredItem -> { /* already handled in onItem().invoke */ },
-				failure -> { /* already handled in onFailure().invoke */ }
-		);
+				@Override
+				public void onCompleted() {
+					completed.set(true);
+					timeoutTask.cancel(false);
+					log.debug("Stream completed successfully");
+				}
+			};
+
+		// Execute stream call asynchronously
+		streamExecutor.execute(() -> {
+			try {
+				asyncStub.streamTelemetry(protoRequest, observer);
+			} catch (Exception e) {
+				log.error("Failed to start stream: {}", e.getMessage(), e);
+				if (onError != null) {
+					onError.accept(e);
+				}
+			}
+		});
 	}
-
 
 	/**
 	 * Stream telemetry data (convenience method without error callback).
@@ -105,6 +172,7 @@ public class LiveDataImpl implements LiveData {
 
 	/**
 	 * Start live stream for an asset.
+	 * Uses ListenableFuture from gRPC for optimal performance.
 	 *
 	 * @param request The start live stream request (POJO)
 	 * @return CompletableFuture with the response
@@ -114,17 +182,38 @@ public class LiveDataImpl implements LiveData {
 		log.info("Starting live stream for SN: {}, videoId: {}", request.getSn(), request.getVideoId());
 
 		var protoRequest = liveDataMapper.toProtoStartLiveStreamRequest(request);
-
 		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
-		return resilience.executeWithResilience(
-				liveDataService.startLiveStream(protoRequest)
-						.ifNoItem().after(java.time.Duration.ofSeconds(timeout))
-						.failWith(() -> new java.util.concurrent.TimeoutException("Start live stream request timed out"))
-		)
-		.map(liveDataMapper::fromProtoLiveDataResponse)
-		.subscribeAsCompletionStage()
-		.toCompletableFuture();
+		return resilience.executeWithResilienceAsync(() -> {
+			CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+
+			// Convert ListenableFuture to CompletableFuture with timeout
+			var listenableFuture = futureStub.startLiveStream(protoRequest);
+
+			// Set timeout
+			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+				future.completeExceptionally(new TimeoutException("Start live stream timed out after " + timeout + "s"));
+			}, timeout, TimeUnit.SECONDS);
+
+			com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+				new com.google.common.util.concurrent.FutureCallback<>() {
+					@Override
+					public void onSuccess(com.zequent.framework.services.livedata.proto.LiveDataResponse result) {
+						timeoutTask.cancel(false);
+						future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+					}
+
+					@Override
+					public void onFailure(Throwable t) {
+						timeoutTask.cancel(false);
+						future.completeExceptionally(t);
+					}
+				},
+				streamExecutor
+			);
+
+			return future;
+		});
 	}
 
 	/**
@@ -138,17 +227,36 @@ public class LiveDataImpl implements LiveData {
 		log.info("Stopping live stream for SN: {}, videoId: {}", request.getSn(), request.getVideoId());
 
 		var protoRequest = liveDataMapper.toProtoStopLiveStreamRequest(request);
-
 		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
-		return resilience.executeWithResilience(
-				liveDataService.stopLiveStream(protoRequest)
-						.ifNoItem().after(java.time.Duration.ofSeconds(timeout))
-						.failWith(() -> new java.util.concurrent.TimeoutException("Stop live stream request timed out"))
-		)
-		.map(liveDataMapper::fromProtoLiveDataResponse)
-		.subscribeAsCompletionStage()
-		.toCompletableFuture();
+		return resilience.executeWithResilienceAsync(() -> {
+			CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+
+			var listenableFuture = futureStub.stopLiveStream(protoRequest);
+
+			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+				future.completeExceptionally(new TimeoutException("Stop live stream timed out after " + timeout + "s"));
+			}, timeout, TimeUnit.SECONDS);
+
+			com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+				new com.google.common.util.concurrent.FutureCallback<>() {
+					@Override
+					public void onSuccess(com.zequent.framework.services.livedata.proto.LiveDataResponse result) {
+						timeoutTask.cancel(false);
+						future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+					}
+
+					@Override
+					public void onFailure(Throwable t) {
+						timeoutTask.cancel(false);
+						future.completeExceptionally(t);
+					}
+				},
+				streamExecutor
+			);
+
+			return future;
+		});
 	}
 
 	@Override
@@ -156,17 +264,36 @@ public class LiveDataImpl implements LiveData {
 		log.info("Changing camera lens for SN: {}", request.getSn());
 
 		var protoRequest = liveDataMapper.toProtoChangeLensRequest(request);
-
 		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
-		return resilience.executeWithResilience(
-				liveDataService.changeLens(protoRequest)
-						.ifNoItem().after(java.time.Duration.ofSeconds(timeout))
-						.failWith(() -> new java.util.concurrent.TimeoutException("Change camera lens request timed out"))
-		)
-		.map(liveDataMapper::fromProtoLiveDataResponse)
-		.subscribeAsCompletionStage()
-		.toCompletableFuture();
+		return resilience.executeWithResilienceAsync(() -> {
+			CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+
+			var listenableFuture = futureStub.changeLens(protoRequest);
+
+			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+				future.completeExceptionally(new TimeoutException("Change lens timed out after " + timeout + "s"));
+			}, timeout, TimeUnit.SECONDS);
+
+			com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+				new com.google.common.util.concurrent.FutureCallback<>() {
+					@Override
+					public void onSuccess(com.zequent.framework.services.livedata.proto.LiveDataResponse result) {
+						timeoutTask.cancel(false);
+						future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+					}
+
+					@Override
+					public void onFailure(Throwable t) {
+						timeoutTask.cancel(false);
+						future.completeExceptionally(t);
+					}
+				},
+				streamExecutor
+			);
+
+			return future;
+		});
 	}
 
 	@Override
@@ -174,16 +301,56 @@ public class LiveDataImpl implements LiveData {
 		log.info("Changing camera zoom for SN: {}", request.getSn());
 
 		var protoRequest = liveDataMapper.toProtoChangeZoomRequest(request);
-
 		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
-		return resilience.executeWithResilience(
-				liveDataService.changeZoom(protoRequest)
-						.ifNoItem().after(java.time.Duration.ofSeconds(timeout))
-						.failWith(() -> new java.util.concurrent.TimeoutException("Change camera zoom request timed out"))
-		)
-		.map(liveDataMapper::fromProtoLiveDataResponse)
-		.subscribeAsCompletionStage()
-		.toCompletableFuture();
+		return resilience.executeWithResilienceAsync(() -> {
+			CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+
+			var listenableFuture = futureStub.changeZoom(protoRequest);
+
+			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+				future.completeExceptionally(new TimeoutException("Change zoom timed out after " + timeout + "s"));
+			}, timeout, TimeUnit.SECONDS);
+
+			com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+				new com.google.common.util.concurrent.FutureCallback<>() {
+					@Override
+					public void onSuccess(com.zequent.framework.services.livedata.proto.LiveDataResponse result) {
+						timeoutTask.cancel(false);
+						future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+					}
+
+					@Override
+					public void onFailure(Throwable t) {
+						timeoutTask.cancel(false);
+						future.completeExceptionally(t);
+					}
+				},
+				streamExecutor
+			);
+
+			return future;
+		});
+	}
+
+	/**
+	 * Shutdown executors when done.
+	 * Should be called when closing the client.
+	 */
+	public void shutdown() {
+		streamExecutor.shutdown();
+		timeoutScheduler.shutdown();
+		try {
+			if (!streamExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+				streamExecutor.shutdownNow();
+			}
+			if (!timeoutScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+				timeoutScheduler.shutdownNow();
+			}
+		} catch (InterruptedException e) {
+			streamExecutor.shutdownNow();
+			timeoutScheduler.shutdownNow();
+			Thread.currentThread().interrupt();
+		}
 	}
 }

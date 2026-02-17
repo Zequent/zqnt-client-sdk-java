@@ -16,14 +16,24 @@ import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.*;
 
+/**
+ * Mission Autonomy client implementation using standard gRPC stubs.
+ * Performance optimizations:
+ * - Uses FutureStub for optimal async unary calls
+ * - CompletableFuture for framework-agnostic async operations
+ * - Built-in resilience with retry and circuit breaker
+ * - Dedicated executor for callback handling
+ */
 @Slf4j
 public class MissionAutonomyImpl implements MissionAutonomy {
 
-    private final MutinyMissionAutonomyServiceGrpc.MutinyMissionAutonomyServiceStub missionAutonomyService;
+    private final MissionAutonomyServiceGrpc.MissionAutonomyServiceFutureStub futureStub;
     private final GrpcResilience resilience;
     private final GrpcClientConfig config;
+    private final ExecutorService callbackExecutor;
+    private final ScheduledExecutorService timeoutScheduler;
 
     /**
      * Private constructor - use create() factory method.
@@ -36,7 +46,22 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 config.getCircuitBreakerFailureThreshold(),
                 config.getCircuitBreakerWaitDurationMillis()
         );
-        this.missionAutonomyService = MutinyMissionAutonomyServiceGrpc.newMutinyStub(channel);
+        this.futureStub = MissionAutonomyServiceGrpc.newFutureStub(channel);
+
+        // Dedicated executor for gRPC callbacks
+        this.callbackExecutor = Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "mission-autonomy-callback");
+            t.setDaemon(true);
+            return t;
+        });
+
+        // Scheduler for timeout handling (shared)
+        this.timeoutScheduler = Executors.newScheduledThreadPool(1, r -> {
+            Thread t = new Thread(r, "mission-autonomy-timeout");
+            t.setDaemon(true);
+            return t;
+        });
+
         log.debug("MissionAutonomy created with channel for {}:{}",
                 config.getMissionAutonomyConfig().getHost(),
                 config.getMissionAutonomyConfig().getPort());
@@ -68,7 +93,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setMissionDTO(missionBuilder.build())
                 .build();
 
-        return executeAsync(missionAutonomyService.createMission(protoRequest))
+        return executeAsync(() -> futureStub.createMission(protoRequest))
                 .thenApply(this::toMissionResponse);
     }
 
@@ -95,7 +120,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setMissionDTO(missionBuilder.build())
                 .build();
 
-        return executeAsync(missionAutonomyService.updateMission(protoRequest))
+        return executeAsync(() -> futureStub.updateMission(protoRequest))
                 .thenApply(this::toMissionResponse);
     }
 
@@ -108,7 +133,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setMissionId(missionId)
                 .build();
 
-        return executeAsync(missionAutonomyService.getMission(protoRequest))
+        return executeAsync(() -> futureStub.getMission(protoRequest))
                 .thenApply(this::toMissionResponse);
     }
 
@@ -121,7 +146,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setMissionId(missionId)
                 .build();
 
-        return executeAsync(missionAutonomyService.deleteMission(protoRequest))
+        return executeAsync(() -> futureStub.deleteMission(protoRequest))
                 .thenApply(this::toMissionResponse);
     }
 
@@ -139,7 +164,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                         .build())
                 .build();
 
-        return executeAsync(missionAutonomyService.createTask(protoRequest))
+        return executeAsync(() -> futureStub.createTask(protoRequest))
                 .thenApply(this::toTaskResponse);
     }
 
@@ -159,7 +184,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                         .build())
                 .build();
 
-        return executeAsync(missionAutonomyService.updateTask(protoRequest))
+        return executeAsync(() -> futureStub.updateTask(protoRequest))
                 .thenApply(this::toTaskResponse);
     }
 
@@ -172,7 +197,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(missionAutonomyService.getTask(protoRequest))
+        return executeAsync(() -> futureStub.getTask(protoRequest))
                 .thenApply(this::toTaskResponse);
     }
 
@@ -185,7 +210,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setFlightId(flightId)
                 .build();
 
-        return executeAsync(missionAutonomyService.getTaskByFlightId(protoRequest))
+        return executeAsync(() -> futureStub.getTaskByFlightId(protoRequest))
                 .thenApply(this::toTaskResponse);
     }
 
@@ -198,7 +223,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(missionAutonomyService.deleteTask(protoRequest))
+        return executeAsync(() -> futureStub.deleteTask(protoRequest))
                 .thenApply(this::toTaskResponse);
     }
 
@@ -211,7 +236,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(missionAutonomyService.startTask(protoRequest))
+        return executeAsync(() -> futureStub.startTask(protoRequest))
                 .thenApply(this::toTaskResponse);
     }
 
@@ -224,7 +249,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(missionAutonomyService.stopTask(protoRequest))
+        return executeAsync(() -> futureStub.stopTask(protoRequest))
                 .thenApply(this::toTaskResponse);
     }
 
@@ -251,7 +276,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setSchedulerDTO(schedulerBuilder.build())
                 .build();
 
-        return executeAsync(missionAutonomyService.createScheduler(protoRequest))
+        return executeAsync(() -> futureStub.createScheduler(protoRequest))
                 .thenApply(this::toSchedulerResponse);
     }
 
@@ -280,7 +305,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setSchedulerDTO(schedulerBuilder.build())
                 .build();
 
-        return executeAsync(missionAutonomyService.updateScheduler(protoRequest))
+        return executeAsync(() -> futureStub.updateScheduler(protoRequest))
                 .thenApply(this::toSchedulerResponse);
     }
 
@@ -293,7 +318,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setSchedulerId(schedulerId)
                 .build();
 
-        return executeAsync(missionAutonomyService.getScheduler(protoRequest))
+        return executeAsync(() -> futureStub.getScheduler(protoRequest))
                 .thenApply(this::toSchedulerResponse);
     }
 
@@ -306,7 +331,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setSchedulerId(schedulerId)
                 .build();
 
-        return executeAsync(missionAutonomyService.deleteScheduler(protoRequest))
+        return executeAsync(() -> futureStub.deleteScheduler(protoRequest))
                 .thenApply(this::toSchedulerResponse);
     }
 
@@ -317,23 +342,63 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .build();
     }
 
-    private <T> CompletableFuture<T> executeAsync(io.smallrye.mutiny.Uni<T> uni) {
-        CompletableFuture<T> future = new CompletableFuture<>();
-
+    /**
+     * Execute async gRPC call with resilience and timeout.
+     * Converts ListenableFuture to CompletableFuture with proper resource management.
+     */
+    private <T> CompletableFuture<T> executeAsync(java.util.function.Supplier<com.google.common.util.concurrent.ListenableFuture<T>> futureSupplier) {
         int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
-        // Apply resilience (retry + circuit breaker) and timeout
-        resilience.executeWithResilience(uni)
-                .ifNoItem().after(java.time.Duration.ofSeconds(timeout)).fail()
-                .subscribe().with(
-                        future::complete,
-                        throwable -> {
-                            log.error("Mission autonomy request failed: {}", throwable.getMessage(), throwable);
-                            future.completeExceptionally(new RuntimeException("Mission autonomy request failed", throwable));
-                        }
-                );
+        return resilience.executeWithResilienceAsync(() -> {
+            CompletableFuture<T> future = new CompletableFuture<>();
 
-        return future;
+            // Set timeout using shared scheduler (performance optimization)
+            ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+                future.completeExceptionally(new TimeoutException("Request timed out after " + timeout + "s"));
+            }, timeout, TimeUnit.SECONDS);
+
+            // Convert ListenableFuture to CompletableFuture
+            com.google.common.util.concurrent.Futures.addCallback(
+                    futureSupplier.get(),
+                    new com.google.common.util.concurrent.FutureCallback<T>() {
+                        @Override
+                        public void onSuccess(T result) {
+                            timeoutTask.cancel(false);
+                            future.complete(result);
+                        }
+
+                        @Override
+                        public void onFailure(Throwable t) {
+                            timeoutTask.cancel(false);
+                            future.completeExceptionally(t);
+                        }
+                    },
+                    callbackExecutor
+            );
+
+            return future;
+        });
+    }
+
+    /**
+     * Shutdown executors when done.
+     * Should be called when closing the client.
+     */
+    public void shutdown() {
+        callbackExecutor.shutdown();
+        timeoutScheduler.shutdown();
+        try {
+            if (!callbackExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                callbackExecutor.shutdownNow();
+            }
+            if (!timeoutScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                timeoutScheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            callbackExecutor.shutdownNow();
+            timeoutScheduler.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     private MissionResponse toMissionResponse(com.zequent.framework.services.mission.proto.MissionResponse proto) {

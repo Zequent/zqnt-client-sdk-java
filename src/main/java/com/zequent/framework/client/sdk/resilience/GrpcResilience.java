@@ -2,15 +2,15 @@ package com.zequent.framework.client.sdk.resilience;
 
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.smallrye.mutiny.Uni;
 import lombok.extern.slf4j.Slf4j;
 
-import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
  * Provides resilience patterns (retry, circuit breaker, timeout) for gRPC calls.
+ * Framework-agnostic implementation using only standard Java APIs.
  */
 @Slf4j
 public class GrpcResilience {
@@ -32,17 +32,50 @@ public class GrpcResilience {
     }
 
     /**
-     * Execute a gRPC call with retry and circuit breaker.
+     * Execute an async gRPC call with retry and circuit breaker.
+     * Uses CompletableFuture for framework-agnostic async operations.
      */
-    public <T> Uni<T> executeWithResilience(Uni<T> uni) {
-        return checkCircuitBreaker()
-                .chain(() -> uni
-                        .onFailure().retry()
-                        .withBackOff(Duration.ofMillis(retryDelayMillis))
-                        .atMost(maxRetryAttempts)
-                        .onFailure().invoke(this::recordFailure)
-                        .onItem().invoke(item -> recordSuccess())
-                );
+    public <T> CompletableFuture<T> executeWithResilienceAsync(Supplier<CompletableFuture<T>> futureSupplier) {
+        checkCircuitBreakerBlocking(); // Throws if circuit is open
+
+        return executeWithRetry(futureSupplier, 0);
+    }
+
+    private <T> CompletableFuture<T> executeWithRetry(Supplier<CompletableFuture<T>> futureSupplier, int attempt) {
+        return futureSupplier.get()
+                .thenApply(result -> {
+                    recordSuccess();
+                    return result;
+                })
+                .exceptionallyCompose(throwable -> {
+                    Throwable cause = unwrapException(throwable);
+
+                    if (attempt < maxRetryAttempts && isRetryable(cause)) {
+                        long delay = retryDelayMillis * (attempt + 1); // Exponential backoff
+                        log.warn("Attempt {} failed, retrying after {} ms: {}",
+                                attempt + 1, delay, cause.getMessage());
+
+                        // Create a delayed CompletableFuture for retry
+                        CompletableFuture<T> delayedRetry = new CompletableFuture<>();
+                        CompletableFuture.delayedExecutor(delay, java.util.concurrent.TimeUnit.MILLISECONDS)
+                                .execute(() -> {
+                                    executeWithRetry(futureSupplier, attempt + 1)
+                                            .whenComplete((result, error) -> {
+                                                if (error != null) {
+                                                    delayedRetry.completeExceptionally(error);
+                                                } else {
+                                                    delayedRetry.complete(result);
+                                                }
+                                            });
+                                });
+                        return delayedRetry;
+                    } else {
+                        recordFailure(cause);
+                        return CompletableFuture.failedFuture(
+                                new RuntimeException("All retry attempts failed after " + (attempt + 1) + " tries", cause)
+                        );
+                    }
+                });
     }
 
     /**
@@ -82,21 +115,6 @@ public class GrpcResilience {
         throw new RuntimeException("All retry attempts failed", lastException);
     }
 
-    private Uni<Void> checkCircuitBreaker() {
-        if (circuitOpen) {
-            long now = System.currentTimeMillis();
-            if (now - circuitOpenedAt >= circuitBreakerWaitDurationMillis) {
-                log.info("Circuit breaker attempting to close after wait duration");
-                circuitOpen = false;
-                failureCount.set(0);
-            } else {
-                return Uni.createFrom().failure(
-                        new RuntimeException("Circuit breaker is OPEN - rejecting call"));
-            }
-        }
-        return Uni.createFrom().voidItem();
-    }
-
     private void checkCircuitBreakerBlocking() {
         if (circuitOpen) {
             long now = System.currentTimeMillis();
@@ -110,9 +128,9 @@ public class GrpcResilience {
         }
     }
 
-    private void recordSuccess() {
+    public void recordSuccess() {
         if (failureCount.get() > 0) {
-            log.info("Request succeeded - resetting failure count");
+            log.debug("Request succeeded - resetting failure count");
             failureCount.set(0);
         }
         if (circuitOpen) {
@@ -121,7 +139,7 @@ public class GrpcResilience {
         }
     }
 
-    private void recordFailure(Throwable throwable) {
+    public void recordFailure(Throwable throwable) {
         int failures = failureCount.incrementAndGet();
         log.warn("Request failed - failure count: {}/{}", failures, circuitBreakerFailureThreshold);
 
@@ -132,7 +150,7 @@ public class GrpcResilience {
         }
     }
 
-    private boolean isRetryable(Exception e) {
+    private boolean isRetryable(Throwable e) {
         if (e instanceof StatusRuntimeException) {
             Status.Code code = ((StatusRuntimeException) e).getStatus().getCode();
             return code == Status.Code.UNAVAILABLE ||
@@ -141,6 +159,13 @@ public class GrpcResilience {
                    code == Status.Code.UNKNOWN;
         }
         return true; // Retry other exceptions
+    }
+
+    private Throwable unwrapException(Throwable throwable) {
+        if (throwable instanceof java.util.concurrent.CompletionException && throwable.getCause() != null) {
+            return throwable.getCause();
+        }
+        return throwable;
     }
 
     public boolean isCircuitOpen() {

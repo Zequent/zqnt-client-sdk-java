@@ -6,7 +6,7 @@ import com.zequent.framework.client.sdk.remotecontrol.ManualControlInputSession;
 import com.zequent.framework.common.proto.RequestBase;
 import com.zequent.framework.services.remote.proto.RemoteControlManualControlInputRequest;
 import com.zequent.framework.utils.core.ProtobufHelpers;
-import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
+import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.UUID;
@@ -14,12 +14,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Implementation of ManualControlInputSession for streaming manual control inputs via gRPC.
+ * Implementation of ManualControlInputSession for streaming manual control inputs via plain gRPC.
+ * Uses StreamObserver for bidirectional streaming (framework-agnostic).
  */
 @Slf4j
 public class ManualControlInputSessionImpl implements ManualControlInputSession {
 
-    private final BroadcastProcessor<RemoteControlManualControlInputRequest> processor;
+    private final StreamObserver<RemoteControlManualControlInputRequest> requestObserver;
     private final CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> responseFuture;
     private final String sn;
     private boolean completed = false;
@@ -27,10 +28,10 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
     public ManualControlInputSessionImpl(
             String sn,
             CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> responseFuture,
-            BroadcastProcessor<RemoteControlManualControlInputRequest> processor) {
+            StreamObserver<RemoteControlManualControlInputRequest> requestObserver) {
         this.sn = sn;
         this.responseFuture = responseFuture;
-        this.processor = processor;
+        this.requestObserver = requestObserver;
     }
 
     @Override
@@ -65,7 +66,7 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
                 .setRequest(builder.build())
                 .build();
 
-        processor.onNext(protoRequest);
+        requestObserver.onNext(protoRequest);
     }
 
     @Override
@@ -76,7 +77,7 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
 
         log.info("Completing manual control input session for SN: {}", sn);
         completed = true;
-        processor.onComplete();
+        requestObserver.onCompleted();
 
         try {
             var protoResponse = responseFuture.get(30, TimeUnit.SECONDS);
@@ -95,14 +96,14 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
 
         log.error("Completing manual control input session with error for SN: {}", sn, error);
         completed = true;
-        processor.onError(error);
+        requestObserver.onError(error);
     }
 
     @Override
     public void close() {
         if (!completed) {
             log.warn("Closing incomplete manual control input session for SN: {}", sn);
-            processor.onComplete();
+            requestObserver.onCompleted();
             completed = true;
         }
     }

@@ -10,38 +10,52 @@ import com.zequent.framework.common.proto.RequestBase;
 import com.zequent.framework.services.remote.proto.*;
 import com.zequent.framework.utils.core.ProtobufHelpers;
 import io.grpc.ManagedChannel;
-import io.smallrye.mutiny.Multi;
-import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
+import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Internal implementation of the RemoteControl interface.
+ * Internal implementation of RemoteControl using standard gRPC AsyncStub.
  * NOT exposed as a CDI bean - only accessible via ZequentClient.
- * Includes built-in retry logic, circuit breaker, and reconnection handling.
+ *
+ * Performance optimizations:
+ * - Uses AsyncStub (most performant) for ALL operations
+ * - StreamObserver for callback-based non-blocking I/O
+ * - CompletableFuture for framework-agnostic async operations
+ * - Shared timeout scheduler for resource efficiency
+ * - Circuit breaker and retry logic via GrpcResilience
  */
 @Slf4j
 public class RemoteControlImpl implements RemoteControl {
 
-	private final RemoteControlServiceGrpc.RemoteControlServiceStub remoteControlService;
+	private final RemoteControlServiceGrpc.RemoteControlServiceStub asyncStub;
 	private final GrpcResilience resilience;
-    private final GrpcClientConfig config;
+	private final GrpcClientConfig config;
+	private final ScheduledExecutorService timeoutScheduler;
 
 	/**
 	 * Private constructor - use create() factory method.
 	 */
 	private RemoteControlImpl(GrpcClientConfig config, ManagedChannel channel) {
 		this.config = config;
-        this.resilience = new GrpcResilience(
-                config.getMaxRetryAttempts(),
-                config.getRetryDelayMillis(),
-                config.getCircuitBreakerFailureThreshold(),
-                config.getCircuitBreakerWaitDurationMillis()
-        );
-		this.remoteControlService = RemoteControlServiceGrpc.newStub(channel);
+		this.resilience = new GrpcResilience(
+				config.getMaxRetryAttempts(),
+				config.getRetryDelayMillis(),
+				config.getCircuitBreakerFailureThreshold(),
+				config.getCircuitBreakerWaitDurationMillis()
+		);
+		this.asyncStub = RemoteControlServiceGrpc.newStub(channel);
+
+		// Scheduler for timeout handling (shared across all calls)
+		this.timeoutScheduler = Executors.newScheduledThreadPool(1, r -> {
+			Thread t = new Thread(r, "remote-control-timeout");
+			t.setDaemon(true);
+			return t;
+		});
+
 		log.debug("RemoteControlImpl created with channel for {}:{}",
 				config.getRemoteControlConfig().getHost(),
 				config.getRemoteControlConfig().getPort());
@@ -68,7 +82,7 @@ public class RemoteControlImpl implements RemoteControl {
 						.build())
 				.build();
 
-		return executeAsync(remoteControlService.takeOff(protoRequest))
+		return executeAsync(observer -> asyncStub.takeOff(protoRequest, observer))
 				.thenApply(proto -> toTakeoffResponse(proto, request.getSn()));
 	}
 
@@ -85,7 +99,7 @@ public class RemoteControlImpl implements RemoteControl {
 						.build())
 				.build();
 
-		return executeAsync(remoteControlService.goTo(protoRequest))
+		return executeAsync(observer -> asyncStub.goTo(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -104,7 +118,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setRequest(rthBuilder.build())
 				.build();
 
-		return executeAsync(remoteControlService.returnToHome(protoRequest))
+		return executeAsync(observer -> asyncStub.returnToHome(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -121,7 +135,7 @@ public class RemoteControlImpl implements RemoteControl {
 						.build())
 				.build();
 
-		return executeAsync(remoteControlService.lookAt(protoRequest))
+		return executeAsync(observer -> asyncStub.lookAt(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -144,7 +158,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setRequest(manualControlBuilder.build())
 				.build();
 
-		return executeAsync(remoteControlService.enterManualControl(protoRequest))
+		return executeAsync(observer -> asyncStub.enterManualControl(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -167,7 +181,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setRequest(manualControlBuilder.build())
 				.build();
 
-		return executeAsync(remoteControlService.exitManualControl(protoRequest))
+		return executeAsync(observer -> asyncStub.exitManualControl(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -175,24 +189,34 @@ public class RemoteControlImpl implements RemoteControl {
 	public ManualControlInputSession startManualControlInput(String sn, String assetId) {
 		log.info("Starting manual control input session for SN: {}", sn);
 
-		// Create a processor to emit stream items
-		var processor =
-				BroadcastProcessor.<RemoteControlManualControlInputRequest>
-						create();
-
-		// Create the gRPC stream call
-		var multi = Multi.createFrom().publisher(processor);
-		var responseUni = remoteControlService.manualControlInput(multi);
-
-		// Convert to CompletableFuture for the session
+		// CompletableFuture to capture the final response
 		var responseFuture = new CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse>();
 
-		responseUni.subscribe().with(
-				responseFuture::complete,
-				responseFuture::completeExceptionally
-		);
+		// Response observer to handle server responses
+		StreamObserver<com.zequent.framework.services.remote.proto.RemoteControlResponse> responseObserver =
+			new StreamObserver<>() {
+				@Override
+				public void onNext(com.zequent.framework.services.remote.proto.RemoteControlResponse response) {
+					responseFuture.complete(response);
+				}
 
-		return new ManualControlInputSessionImpl(sn, responseFuture, processor);
+				@Override
+				public void onError(Throwable t) {
+					log.error("Manual control input stream error", t);
+					responseFuture.completeExceptionally(t);
+				}
+
+				@Override
+				public void onCompleted() {
+					log.debug("Manual control input stream completed");
+				}
+			};
+
+		// Start bidirectional streaming - returns request observer
+		StreamObserver<RemoteControlManualControlInputRequest> requestObserver =
+			asyncStub.manualControlInput(responseObserver);
+
+		return new ManualControlInputSessionImpl(sn, responseFuture, requestObserver);
 	}
 
 	@Override
@@ -203,7 +227,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setBase(buildBase(request.getSn()))
 				.build();
 
-		return executeAsync(remoteControlService.openCover(protoRequest))
+		return executeAsync(observer -> asyncStub.openCover(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -218,7 +242,7 @@ public class RemoteControlImpl implements RemoteControl {
 			builder.setForce(request.getValue());
 		}
 
-		return executeAsync(remoteControlService.closeCover(builder.build()))
+		return executeAsync(observer -> asyncStub.closeCover(builder.build(), observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -230,7 +254,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setBase(buildBase(request.getSn()))
 				.build();
 
-		return executeAsync(remoteControlService.startCharging(protoRequest))
+		return executeAsync(observer -> asyncStub.startCharging(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -242,7 +266,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setBase(buildBase(request.getSn()))
 				.build();
 
-		return executeAsync(remoteControlService.stopCharging(protoRequest))
+		return executeAsync(observer -> asyncStub.stopCharging(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -254,7 +278,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setBase(buildBase(request.getSn()))
 				.build();
 
-		return executeAsync(remoteControlService.rebootAsset(protoRequest))
+		return executeAsync(observer -> asyncStub.rebootAsset(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -267,7 +291,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setBoot(request.getValue() != null && request.getValue())
 				.build();
 
-		return executeAsync(remoteControlService.bootSubAsset(protoRequest))
+		return executeAsync(observer -> asyncStub.bootSubAsset(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -280,7 +304,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setEnabled(request.getValue() != null && request.getValue())
 				.build();
 
-		return executeAsync(remoteControlService.enterOrCloseRemoteDebugMode(protoRequest))
+		return executeAsync(observer -> asyncStub.enterOrCloseRemoteDebugMode(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -292,7 +316,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setBase(buildBase(request.getSn()))
 				.build();
 
-		return executeAsync(remoteControlService.changeAcMode(protoRequest))
+		return executeAsync(observer -> asyncStub.changeAcMode(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -305,23 +329,70 @@ public class RemoteControlImpl implements RemoteControl {
 		return builder.build();
 	}
 
+	/**
+	 * Execute async gRPC call with resilience and timeout using StreamObserver pattern.
+	 * AsyncStub is the most performant approach (callback-based, non-blocking).
+	 */
 	private CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> executeAsync(
-			io.smallrye.mutiny.Uni<com.zequent.framework.services.remote.proto.RemoteControlResponse> uni) {
-		CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> future = new CompletableFuture<>();
+			java.util.function.Consumer<StreamObserver<com.zequent.framework.services.remote.proto.RemoteControlResponse>> stubCall) {
+		int timeout = config.getRequestTimeoutSeconds();
 
+		return resilience.executeWithResilienceAsync(() -> {
+			CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> future = new CompletableFuture<>();
+			AtomicBoolean completed = new AtomicBoolean(false);
 
-		// Apply resilience (retry + circuit breaker) and timeout
-		resilience.executeWithResilience(uni)
-				.ifNoItem().after(java.time.Duration.ofSeconds(config.getRequestTimeoutSeconds())).fail()
-				.subscribe().with(
-						future::complete,
-						throwable -> {
-							log.error("Remote control request failed: {}", throwable.getMessage(), throwable);
-							future.completeExceptionally(new RuntimeException("Remote control request failed", throwable));
-						}
-				);
+			// Set timeout
+			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+				if (completed.compareAndSet(false, true)) {
+					future.completeExceptionally(new TimeoutException("Remote control request timed out after " + timeout + "s"));
+				}
+			}, timeout, TimeUnit.SECONDS);
 
-		return future;
+			// StreamObserver for callback-based async handling
+			StreamObserver<com.zequent.framework.services.remote.proto.RemoteControlResponse> observer = new StreamObserver<>() {
+				@Override
+				public void onNext(com.zequent.framework.services.remote.proto.RemoteControlResponse response) {
+					if (completed.compareAndSet(false, true)) {
+						timeoutTask.cancel(false);
+						future.complete(response);
+					}
+				}
+
+				@Override
+				public void onError(Throwable t) {
+					if (completed.compareAndSet(false, true)) {
+						timeoutTask.cancel(false);
+						log.error("Remote control request failed: {}", t.getMessage(), t);
+						future.completeExceptionally(t);
+					}
+				}
+
+				@Override
+				public void onCompleted() {
+					// Response handled in onNext
+				}
+			};
+
+			// Execute the stub call
+			stubCall.accept(observer);
+			return future;
+		});
+	}
+
+	/**
+	 * Shutdown executors when done.
+	 * Should be called when closing the client.
+	 */
+	public void shutdown() {
+		timeoutScheduler.shutdown();
+		try {
+			if (!timeoutScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+				timeoutScheduler.shutdownNow();
+			}
+		} catch (InterruptedException e) {
+			timeoutScheduler.shutdownNow();
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	private TakeoffResponse toTakeoffResponse(com.zequent.framework.services.remote.proto.RemoteControlResponse proto, String sn) {
