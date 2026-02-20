@@ -1,8 +1,8 @@
 package com.zqnt.sdk.client.livedata.domains;
 
 import com.zequent.framework.common.proto.ErrorCodes;
-import com.zequent.framework.utils.edge.sdk.dto.AssetTelemetryData;
-import com.zequent.framework.utils.edge.sdk.dto.SubAssetTelemetryData;
+import com.zqnt.utils.edge.sdk.domains.AssetTelemetryData;
+import com.zqnt.utils.edge.sdk.domains.SubAssetTelemetryData;
 import lombok.*;
 
 import java.time.Instant;

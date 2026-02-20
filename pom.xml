@@ -114,7 +114,7 @@
 
         <!-- Zequent Framework Utils (internal dependency - optional for public) -->
         <dependency>
-            <groupId>com.zequent</groupId>
+            <groupId>com.zqnt</groupId>
             <artifactId>zqnt-utils</artifactId>
             <version>1.0.0</version>
         </dependency>

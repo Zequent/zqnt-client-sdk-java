@@ -10,9 +10,9 @@ import com.zqnt.sdk.client.livedata.domains.StreamTelemetryRequest;
 import com.zqnt.sdk.client.livedata.domains.StreamTelemetryResponse;
 import com.zequent.framework.common.proto.*;
 import com.zequent.framework.services.livedata.proto.*;
-import com.zequent.framework.utils.core.ProtobufHelpers;
-import com.zequent.framework.utils.edge.sdk.dto.AssetTelemetryData;
-import com.zequent.framework.utils.edge.sdk.dto.SubAssetTelemetryData;
+import com.zqnt.utils.core.ProtobufHelpers;
+import com.zqnt.utils.edge.sdk.domains.AssetTelemetryData;
+import com.zqnt.utils.edge.sdk.domains.SubAssetTelemetryData;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -151,7 +151,7 @@ public class LiveDataMapper {
         }
 
         if (proto.hasPositionState()) {
-            data.setPositionState(com.zequent.framework.utils.edge.sdk.dto.AssetTelemetryData.PositionState.builder()
+            data.setPositionState(com.zqnt.utils.edge.sdk.domains.AssetTelemetryData.PositionState.builder()
                     .gpsNumber(proto.getPositionState().getGpsNumber())
                     .rtkNumber(proto.getPositionState().getRtkNumber())
                     .quality(proto.getPositionState().getQuality())

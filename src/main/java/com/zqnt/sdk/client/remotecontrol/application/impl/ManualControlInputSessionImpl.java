@@ -5,7 +5,7 @@ import com.zqnt.sdk.client.remotecontrol.domains.ManualControlInput;
 import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
 import com.zequent.framework.common.proto.RequestBase;
 import com.zequent.framework.services.remote.proto.RemoteControlManualControlInputRequest;
-import com.zequent.framework.utils.core.ProtobufHelpers;
+import com.zqnt.utils.core.ProtobufHelpers;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 
