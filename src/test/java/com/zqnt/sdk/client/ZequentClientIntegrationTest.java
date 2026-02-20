@@ -1,10 +1,11 @@
-package com.zequent.framework.client.sdk;
+package com.zqnt.sdk.client;
 
-import com.zequent.framework.client.sdk.livedata.LiveData;
-import com.zequent.framework.client.sdk.models.DockOperationRequest;
-import com.zequent.framework.client.sdk.models.RemoteControlResponse;
-import com.zequent.framework.client.sdk.models.StreamTelemetryRequest;
-import com.zequent.framework.client.sdk.remotecontrol.RemoteControl;
+import com.zqnt.sdk.client.livedata.application.LiveData;
+import com.zqnt.sdk.client.livedata.domains.StreamTelemetryRequest;
+import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
+import com.zqnt.sdk.client.remotecontrol.domains.DockOperationRequest;
+import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
+
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;

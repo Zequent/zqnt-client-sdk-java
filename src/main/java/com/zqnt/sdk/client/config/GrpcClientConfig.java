@@ -1,4 +1,4 @@
-package com.zequent.framework.client.sdk.config;
+package com.zqnt.sdk.client.config;
 
 import lombok.Builder;
 import lombok.Data;

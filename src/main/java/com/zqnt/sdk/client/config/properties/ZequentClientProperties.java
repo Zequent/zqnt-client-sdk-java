@@ -1,4 +1,4 @@
-package com.zequent.framework.client.sdk.config.properties;
+package com.zqnt.sdk.client.config.properties;
 
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;

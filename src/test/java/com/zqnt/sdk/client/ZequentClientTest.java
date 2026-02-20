@@ -1,9 +1,10 @@
-package com.zequent.framework.client.sdk;
+package com.zqnt.sdk.client;
 
-import com.zequent.framework.client.sdk.config.ServiceConfig;
-import com.zequent.framework.client.sdk.livedata.LiveData;
-import com.zequent.framework.client.sdk.missionautonomy.MissionAutonomy;
-import com.zequent.framework.client.sdk.remotecontrol.RemoteControl;
+import com.zqnt.sdk.client.config.ServiceConfig;
+import com.zqnt.sdk.client.livedata.application.LiveData;
+import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
+import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

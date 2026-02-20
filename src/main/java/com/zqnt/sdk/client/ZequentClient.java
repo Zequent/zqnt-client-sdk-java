@@ -1,14 +1,15 @@
-package com.zequent.framework.client.sdk;
+package com.zqnt.sdk.client;
 
-import com.zequent.framework.client.sdk.channel.ChannelFactory;
-import com.zequent.framework.client.sdk.config.GrpcClientConfig;
-import com.zequent.framework.client.sdk.config.ServiceConfig;
-import com.zequent.framework.client.sdk.livedata.LiveData;
-import com.zequent.framework.client.sdk.livedata.impl.LiveDataImpl;
-import com.zequent.framework.client.sdk.missionautonomy.MissionAutonomy;
-import com.zequent.framework.client.sdk.missionautonomy.impl.MissionAutonomyImpl;
-import com.zequent.framework.client.sdk.remotecontrol.RemoteControl;
-import com.zequent.framework.client.sdk.remotecontrol.impl.RemoteControlImpl;
+import com.zqnt.sdk.client.config.GrpcClientConfig;
+import com.zqnt.sdk.client.config.ServiceConfig;
+import com.zqnt.sdk.client.grpc.ChannelFactory;
+import com.zqnt.sdk.client.livedata.application.LiveData;
+import com.zqnt.sdk.client.livedata.application.impl.LiveDataImpl;
+import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
+import com.zqnt.sdk.client.missionautonomy.application.impl.MissionAutonomyImpl;
+import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
+import com.zqnt.sdk.client.remotecontrol.application.impl.RemoteControlImpl;
+
 import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,28 +24,6 @@ import java.util.concurrent.TimeUnit;
  *
  * This class is NOT a CDI bean itself - it's created by ZequentClientProducer.
  * Customers inject it using @Inject ZequentClient.
- *
- * Usage example:
- * <pre>
- * // CDI (recommended):
- * @Inject ZequentClient client;
- *
- * // Manual (for tests):
- * ZequentClient client = ZequentClient.builder()
- *     .remoteControl()
- *         .host("localhost")
- *         .port(9091)
- *         .useStork(false)
- *         .done()
- *     .liveData()
- *         .host("localhost")
- *         .port(9092)
- *         .done()
- *     .build();
- *
- * client.remoteControl().takeoff(...);
- * client.liveData().streamTelemetry(...);
- * </pre>
  */
 @Slf4j
 public class ZequentClient implements AutoCloseable {

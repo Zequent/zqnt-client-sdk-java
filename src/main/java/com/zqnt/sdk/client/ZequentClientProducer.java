@@ -1,18 +1,18 @@
-package com.zequent.framework.client.sdk;
+package com.zqnt.sdk.client;
 
-import com.zequent.framework.client.sdk.channel.ChannelFactory;
-import com.zequent.framework.client.sdk.config.GrpcClientConfig;
-import com.zequent.framework.client.sdk.config.ZequentClientConfigFactory;
-import com.zequent.framework.client.sdk.livedata.LiveData;
-import com.zequent.framework.client.sdk.livedata.impl.LiveDataImpl;
-import com.zequent.framework.client.sdk.missionautonomy.MissionAutonomy;
-import com.zequent.framework.client.sdk.missionautonomy.impl.MissionAutonomyImpl;
-import com.zequent.framework.client.sdk.remotecontrol.RemoteControl;
-import com.zequent.framework.client.sdk.remotecontrol.impl.RemoteControlImpl;
+import com.zqnt.sdk.client.config.GrpcClientConfig;
+import com.zqnt.sdk.client.config.ZequentClientConfigFactory;
+import com.zqnt.sdk.client.grpc.ChannelFactory;
+import com.zqnt.sdk.client.livedata.application.LiveData;
+import com.zqnt.sdk.client.livedata.application.impl.LiveDataImpl;
+import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
+import com.zqnt.sdk.client.missionautonomy.application.impl.MissionAutonomyImpl;
+import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
+import com.zqnt.sdk.client.remotecontrol.application.impl.RemoteControlImpl;
+
 import io.grpc.ManagedChannel;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
-import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;

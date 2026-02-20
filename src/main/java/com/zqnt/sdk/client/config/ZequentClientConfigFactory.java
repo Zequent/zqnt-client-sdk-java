@@ -1,6 +1,6 @@
-package com.zequent.framework.client.sdk.config;
+package com.zqnt.sdk.client.config;
 
-import com.zequent.framework.client.sdk.config.properties.ZequentClientProperties;
+import com.zqnt.sdk.client.config.properties.ZequentClientProperties;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
