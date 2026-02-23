@@ -24,9 +24,10 @@ jobs:
           cache: maven
 
       - name: Build all Java modules (resolve local dependencies)
-        run: mvn -B clean package -Dquarkus.container-image.build=false
+        run: mvn -B clean package --settings .github/settings.xml -Dquarkus.container-image.build=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
   publish-java:
     name: Publish Selected Java SDKs
     runs-on: ubuntu-latest
