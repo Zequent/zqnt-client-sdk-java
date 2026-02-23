@@ -40,6 +40,22 @@
         <mapstruct.version>1.6.3</mapstruct.version>
     </properties>
 
+    <!-- GitHub Packages Repository -->
+    <repositories>
+        <repository>
+            <id>zqnt-utils-repo</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-utils</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+
     <dependencies>
         <!-- Jakarta CDI API (standard annotations, provided by customer's framework) -->
         <dependency>
@@ -155,20 +171,6 @@
         </dependency>
     </dependencies>
 
-    <!-- GitHub Packages Repository -->
-    <repositories>
-        <repository>
-            <id>zqnt-utils-repo</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zqnt-utils</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
 
     <build>
         <plugins>
