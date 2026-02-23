@@ -158,7 +158,7 @@
     <!-- GitHub Packages Repository -->
     <repositories>
         <repository>
-            <id>github</id>
+            <id>zqnt-utils-repo</id>
             <name>GitHub Packages</name>
             <url>https://maven.pkg.github.com/Zequent/zqnt-utils</url>
             <releases>
@@ -259,12 +259,12 @@
     <!-- Publishing Configuration - GitHub Packages -->
     <distributionManagement>
         <repository>
-            <id>github</id>
+            <id>zqnt-client-sdk-repo</id>
             <name>GitHub Packages</name>
             <url>https://maven.pkg.github.com/Zequent/zqnt-client-sdk-java</url>
         </repository>
         <snapshotRepository>
-            <id>github</id>
+            <id>zqnt-client-sdk-repo</id>
             <name>GitHub Packages</name>
             <url>https://maven.pkg.github.com/Zequent/zqnt-client-sdk-java</url>
         </snapshotRepository>
