@@ -7,7 +7,7 @@
     <servers>
         <server>
             <!-- MUST match distributionManagement.repository.id in pom.xml -->
-            <id>zequent-utils-repo</id>
+            <id>zqnt-utils-repo</id>
 
             <!-- Provided by workflow as PACKAGES_TOKEN (can be GITHUB_TOKEN or a PAT) -->
             <username>${env.GITHUB_ACTOR}</username>
@@ -16,7 +16,7 @@
 
         <server>
             <!-- MUST match distributionManagement.repository.id in pom.xml -->
-            <id>zequent-client-sdk-repo</id>
+            <id>zqnt-client-sdk-repo</id>
 
             <!-- Provided by workflow as PACKAGES_TOKEN (can be GITHUB_TOKEN or a PAT) -->
             <username>${env.GITHUB_ACTOR}</username>
