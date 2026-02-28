@@ -1,20 +1,24 @@
 package com.zqnt.sdk.client.missionautonomy.application.impl;
 
+import com.zequent.framework.common.proto.*;
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
 import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
 import com.zqnt.sdk.client.remotecontrol.domains.TaskResponse;
-import com.zequent.framework.common.proto.RequestBase;
 import com.zequent.framework.services.mission.proto.*;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
+import com.zqnt.utils.missionautonomy.domains.WaypointDTO;
 import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
 
@@ -76,17 +80,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<MissionResponse> createMission(MissionDTO missionDTO) {
         log.info("Creating mission: name={}", missionDTO.getName());
 
-        var missionBuilder = com.zequent.framework.common.proto.MissionProtoDTO.newBuilder()
-                .setStatus(missionDTO.getStatus())
-                .setType(missionDTO.getType())
-                .setDescription(missionDTO.getDescription() != null ? missionDTO.getDescription() : "")
-                .setName(missionDTO.getName() != null ? missionDTO.getName() : "")
-                .setStartDate(missionDTO.getStartDate() != null ? ProtobufHelpers.toTimestamp(missionDTO.getStartDate()) : null)
-                .setEndDate(missionDTO.getEndDate() != null ? ProtobufHelpers.toTimestamp(missionDTO.getEndDate()) : null);
-
-        if (missionDTO.getAssignedAssets() != null) {
-            missionBuilder.addAllAssignedAssets(missionDTO.getAssignedAssets());
-        }
+        var missionBuilder = mapMissionDtoToProto(MissionProtoDTO.newBuilder(), missionDTO);
 
         var protoRequest = CreateMissionRequest.newBuilder()
                 .setBase(buildBase())
@@ -101,18 +95,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<MissionResponse> updateMission(String missionId, MissionDTO missionDTO) {
         log.info("Updating mission: missionId={}", missionId);
 
-        var missionBuilder = com.zequent.framework.common.proto.MissionProtoDTO.newBuilder()
-                .setId(missionId)
-                .setStatus(missionDTO.getStatus())
-                .setType(missionDTO.getType())
-                .setDescription(missionDTO.getDescription() != null ? missionDTO.getDescription() : "")
-                .setName(missionDTO.getName() != null ? missionDTO.getName() : "")
-                .setStartDate(missionDTO.getStartDate() != null ? ProtobufHelpers.toTimestamp(missionDTO.getStartDate()) : null)
-                .setEndDate(missionDTO.getEndDate() != null ? ProtobufHelpers.toTimestamp(missionDTO.getEndDate()) : null);
-
-        if (missionDTO.getAssignedAssets() != null) {
-            missionBuilder.addAllAssignedAssets(missionDTO.getAssignedAssets());
-        }
+        var missionBuilder = mapMissionDtoToProto(MissionProtoDTO.newBuilder()
+                .setId(missionId), missionDTO);
 
         var protoRequest = UpdateMissionRequest.newBuilder()
                 .setBase(buildBase())
@@ -122,6 +106,38 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
         return executeAsync(() -> futureStub.updateMission(protoRequest))
                 .thenApply(this::toMissionResponse);
+    }
+
+    private static MissionProtoDTO.@NonNull Builder mapMissionDtoToProto(MissionProtoDTO.Builder missionId, MissionDTO missionDTO) {
+        var missionBuilder = missionId
+                .setName(missionDTO.getName() != null ? missionDTO.getName() : "")
+                .setDescription(missionDTO.getDescription() != null ? missionDTO.getDescription() : "");
+
+        if (missionDTO.getStatus() != null) {
+            missionBuilder.setStatus(missionDTO.getStatus());
+        }
+        if (missionDTO.getType() != null) {
+            missionBuilder.setType(missionDTO.getType());
+        }
+        if (missionDTO.getGeoJson() != null) {
+            missionBuilder.setGeoJson(missionDTO.getGeoJson());
+        }
+        if (missionDTO.getStartDate() != null) {
+            missionBuilder.setStartDate(ProtobufHelpers.toTimestamp(missionDTO.getStartDate()));
+        }
+        if (missionDTO.getEndDate() != null) {
+            missionBuilder.setEndDate(ProtobufHelpers.toTimestamp(missionDTO.getEndDate()));
+        }
+        if (missionDTO.getAssignedAssets() != null && !missionDTO.getAssignedAssets().isEmpty()) {
+            missionBuilder.addAllAssignedAssets(missionDTO.getAssignedAssets());
+        }
+        if (missionDTO.getCreatedAt() != null) {
+            missionBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(missionDTO.getCreatedAt()));
+        }
+        if (missionDTO.getModifiedAt() != null) {
+            missionBuilder.setUpdatedAt(ProtobufHelpers.toTimestamp(missionDTO.getModifiedAt()));
+        }
+        return missionBuilder;
     }
 
     @Override
@@ -154,14 +170,11 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<TaskResponse> createTask(TaskDTO taskDTO) {
         log.info("Creating task: name={}", taskDTO.getName());
 
+        var taskProtoBuilder = mapTaskDtoToProto(TaskProtoDTO.newBuilder(), taskDTO);
+
         var protoRequest = CreateTaskRequest.newBuilder()
                 .setBase(buildBase())
-                .setTaskDTO(com.zequent.framework.common.proto.TaskProtoDTO.newBuilder()
-                        .setName(taskDTO.getName())
-                        .setFlightId(taskDTO.getFlightId() != null ? taskDTO.getFlightId() : "")
-                        .setSnNumber(taskDTO.getSnNumber())
-                        .setMissionId(taskDTO.getMissionId().toString())
-                        .build())
+                .setTaskDTO(taskProtoBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createTask(protoRequest))
@@ -172,20 +185,128 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<TaskResponse> updateTask(String taskId, TaskDTO taskDTO) {
         log.info("Updating task: taskId={}", taskId);
 
+        var taskProtoBuilder = mapTaskDtoToProto(TaskProtoDTO.newBuilder()
+                .setId(taskId), taskDTO);
+
         var protoRequest = UpdateTaskRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
-                .setTaskDTO(com.zequent.framework.common.proto.TaskProtoDTO.newBuilder()
-                        .setId(taskId)
-                        .setName(taskDTO.getName())
-                        .setFlightId(taskDTO.getFlightId() != null ? taskDTO.getFlightId() : "")
-                        .setSnNumber(taskDTO.getSnNumber())
-                        .setMissionId(taskDTO.getMissionId().toString())
-                        .build())
+                .setTaskDTO(taskProtoBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateTask(protoRequest))
                 .thenApply(this::toTaskResponse);
+    }
+
+    private static TaskProtoDTO.@NonNull Builder mapTaskDtoToProto(TaskProtoDTO.Builder taskId, TaskDTO taskDTO) {
+        var taskProtoBuilder = taskId
+                .setName(taskDTO.getName() != null ? taskDTO.getName() : "")
+                .setFlightId(taskDTO.getFlightId() != null ? taskDTO.getFlightId() : "")
+                .setSnNumber(taskDTO.getSnNumber() != null ? taskDTO.getSnNumber() : "")
+                .setAssetId(taskDTO.getAssetId() != null ? taskDTO.getAssetId() : "")
+                .setDescription(taskDTO.getDescription() != null ? taskDTO.getDescription() : "")
+                .setPayloadImagingType(taskDTO.getPayloadImagingType() != null ? taskDTO.getPayloadImagingType() : "")
+                .setFileUrl(taskDTO.getFileUrl() != null ? taskDTO.getFileUrl() : "")
+                .setFileMd5(taskDTO.getFileMd5() != null ? taskDTO.getFileMd5() : "")
+                .setFlightAreaFileUrl(taskDTO.getFlightAreaFileUrl() != null ? taskDTO.getFlightAreaFileUrl() : "")
+                .setFlightAreaChecksum(taskDTO.getFlightAreaChecksum() != null ? taskDTO.getFlightAreaChecksum() : "")
+                .setCurrentStep(taskDTO.getCurrentStep() != null ? taskDTO.getCurrentStep() : "");
+
+        if (taskDTO.getMissionId() != null) {
+            taskProtoBuilder.setMissionId(taskDTO.getMissionId().toString());
+        }
+        if (taskDTO.getStatus() != null) {
+            taskProtoBuilder.setStatus(taskDTO.getStatus());
+        }
+        if (taskDTO.getCreatedAt() != null) {
+            taskProtoBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(taskDTO.getCreatedAt()));
+        }
+        if (taskDTO.getModifiedAt() != null) {
+            taskProtoBuilder.setUpdatedAt(ProtobufHelpers.toTimestamp(taskDTO.getModifiedAt()));
+        }
+        if (taskDTO.getFlyToWaylineMode() != null) {
+            taskProtoBuilder.setFlyToWaylineMode(taskDTO.getFlyToWaylineMode());
+        }
+        if (taskDTO.getWaylineFinishAction() != null) {
+            taskProtoBuilder.setWaylineFinishAction(taskDTO.getWaylineFinishAction());
+        }
+        if (taskDTO.getExitWaylineWhenRcLostEnum() != null) {
+            taskProtoBuilder.setExitWaylineWhenRcLostEnum(taskDTO.getExitWaylineWhenRcLostEnum());
+        }
+        if (taskDTO.getRcLostActionEnum() != null) {
+            taskProtoBuilder.setRcLostActionEnum(taskDTO.getRcLostActionEnum());
+        }
+        if (taskDTO.getTakeOffSecurityHeight() != null) {
+            taskProtoBuilder.setTakeOffSecurityHeight(taskDTO.getTakeOffSecurityHeight());
+        }
+        if (taskDTO.getGlobalTransitionSpeed() != null) {
+            taskProtoBuilder.setGlobalTransitionSpeed(taskDTO.getGlobalTransitionSpeed());
+        }
+        if (taskDTO.getWaylineType() != null) {
+            taskProtoBuilder.setWaylineType(taskDTO.getWaylineType());
+        }
+        if (taskDTO.getWaylineTurnMode() != null) {
+            taskProtoBuilder.setWaylineTurnMode(taskDTO.getWaylineTurnMode());
+        }
+        if (taskDTO.getUseStraightLine() != null) {
+            taskProtoBuilder.setUseStraightLine(taskDTO.getUseStraightLine());
+        }
+        if (taskDTO.getGimbalPitchMode() != null) {
+            taskProtoBuilder.setGimbalPitchMode(taskDTO.getGimbalPitchMode());
+        }
+        if (taskDTO.getGlobalGimbalPitch() != null) {
+            taskProtoBuilder.setGlobalGimbalPitch(taskDTO.getGlobalGimbalPitch());
+        }
+        if (taskDTO.getGlobalSpeed() != null) {
+            taskProtoBuilder.setGlobalSpeed(taskDTO.getGlobalSpeed());
+        }
+        if (taskDTO.getGlobalHeight() != null) {
+            taskProtoBuilder.setGlobalHeight(taskDTO.getGlobalHeight());
+        }
+        if (taskDTO.getRthAltitude() != null) {
+            taskProtoBuilder.setRthAltitude(taskDTO.getRthAltitude());
+        }
+        if (taskDTO.getRthMode() != null) {
+            taskProtoBuilder.setRthMode(taskDTO.getRthMode());
+        }
+        if (taskDTO.getRthSpeed() != null) {
+            taskProtoBuilder.setRthSpeed(taskDTO.getRthSpeed());
+        }
+        if (taskDTO.getOutOfControlAction() != null) {
+            taskProtoBuilder.setOutOfControlAction(taskDTO.getOutOfControlAction());
+        }
+        if (taskDTO.getWaylinePrecisionType() != null) {
+            taskProtoBuilder.setWaylinePrecisionType(taskDTO.getWaylinePrecisionType());
+        }
+        if (taskDTO.getCurrentProgress() != null) {
+            taskProtoBuilder.setCurrentProgress(taskDTO.getCurrentProgress());
+        }
+        if (taskDTO.getBreakReason() != null) {
+            taskProtoBuilder.setBreakReason(taskDTO.getBreakReason());
+        }
+
+        if (!taskDTO.getWaypoints().isEmpty()) {
+            taskProtoBuilder.addAllWaypoints(mapWaypointsDtoToProto(taskDTO.getWaypoints()));
+        }
+        return taskProtoBuilder;
+    }
+
+    private static List<WaypointProtoDTO> mapWaypointsDtoToProto(List<WaypointDTO> waypointDTOS) {
+        List<WaypointProtoDTO> waypointProtoDTOS = new ArrayList<>();
+        waypointDTOS.forEach(waypointDTO -> {
+            waypointProtoDTOS.add(WaypointProtoDTO.newBuilder()
+                    .setLatitude(waypointDTO.getLatitude())
+                    .setLongitude(waypointDTO.getLongitude())
+                    .setAltitude(waypointDTO.getAltitude())
+                    .setSpeed(waypointDTO.getSpeed())
+                    .setWpOrder(waypointDTO.getWpOrder())
+                    .setVehicleAction(waypointDTO.getVehicleAction())
+                    .setGimbalPitch(waypointDTO.getGimbalPitch())
+                    .setFlyTrough(waypointDTO.getFlyThrough())
+                    .setTaskId(String.valueOf(waypointDTO.getTask()))
+                    .build());
+        });
+        return waypointProtoDTOS;
     }
 
     @Override
@@ -257,19 +378,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<SchedulerResponse> createScheduler(SchedulerDTO schedulerDTO) {
         log.info("Creating scheduler: name={}", schedulerDTO.getName());
 
-        var schedulerBuilder = com.zequent.framework.common.proto.SchedulerProtoDTO.newBuilder()
-                .setName(schedulerDTO.getName())
-                .setType(schedulerDTO.getType())
-                .setActive(schedulerDTO.getActive())
-                .setCronExpression(schedulerDTO.getCronExpression() != null ? schedulerDTO.getCronExpression() : "")
-                .setClientTimeZone(schedulerDTO.getClientTimeZone() != null ? schedulerDTO.getClientTimeZone() : "");
+        var schedulerBuilder = mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder(), schedulerDTO);
 
-        if (schedulerDTO.getTaskId() != null) {
-            schedulerBuilder.setTaskId(schedulerDTO.getTaskId().toString());
-        }
-        if (schedulerDTO.getMissionId() != null) {
-            schedulerBuilder.setMissionId(schedulerDTO.getMissionId().toString());
-        }
 
         var protoRequest = CreateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
@@ -280,24 +390,33 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .thenApply(this::toSchedulerResponse);
     }
 
-    @Override
-    public CompletableFuture<SchedulerResponse> updateScheduler(String schedulerId, SchedulerDTO schedulerDTO) {
-        log.info("Updating scheduler: schedulerId={}", schedulerId);
-
-        var schedulerBuilder = com.zequent.framework.common.proto.SchedulerProtoDTO.newBuilder()
-                .setId(schedulerId)
-                .setName(schedulerDTO.getName())
-                .setType(schedulerDTO.getType())
-                .setActive(schedulerDTO.getActive())
+    private static SchedulerProtoDTO.@NonNull Builder mapSchedulerDtoToProto(SchedulerProtoDTO.Builder newBuilder, SchedulerDTO schedulerDTO) {
+        var schedulerBuilder = newBuilder
+                .setName(schedulerDTO.getName() != null ? schedulerDTO.getName() : "")
                 .setCronExpression(schedulerDTO.getCronExpression() != null ? schedulerDTO.getCronExpression() : "")
                 .setClientTimeZone(schedulerDTO.getClientTimeZone() != null ? schedulerDTO.getClientTimeZone() : "");
 
+        if (schedulerDTO.getType() != null) {
+            schedulerBuilder.setType(schedulerDTO.getType());
+        }
+        if (schedulerDTO.getActive() != null) {
+            schedulerBuilder.setActive(schedulerDTO.getActive());
+        }
         if (schedulerDTO.getTaskId() != null) {
             schedulerBuilder.setTaskId(schedulerDTO.getTaskId().toString());
         }
         if (schedulerDTO.getMissionId() != null) {
             schedulerBuilder.setMissionId(schedulerDTO.getMissionId().toString());
         }
+        return schedulerBuilder;
+    }
+
+    @Override
+    public CompletableFuture<SchedulerResponse> updateScheduler(String schedulerId, SchedulerDTO schedulerDTO) {
+        log.info("Updating scheduler: schedulerId={}", schedulerId);
+
+        var schedulerBuilder = mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder()
+                .setId(schedulerId), schedulerDTO);
 
         var protoRequest = UpdateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
@@ -352,7 +471,6 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         return resilience.executeWithResilienceAsync(() -> {
             CompletableFuture<T> future = new CompletableFuture<>();
 
-            // Set timeout using shared scheduler (performance optimization)
             ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
                 future.completeExceptionally(new TimeoutException("Request timed out after " + timeout + "s"));
             }, timeout, TimeUnit.SECONDS);
