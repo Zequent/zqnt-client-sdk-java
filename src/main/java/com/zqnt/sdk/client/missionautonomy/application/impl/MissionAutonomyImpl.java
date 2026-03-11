@@ -198,18 +198,14 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .thenApply(this::toTaskResponse);
     }
 
+
+    //TODO fix the sdks
     private static TaskProtoDTO.@NonNull Builder mapTaskDtoToProto(TaskProtoDTO.Builder taskId, TaskDTO taskDTO) {
         var taskProtoBuilder = taskId
                 .setName(taskDTO.getName() != null ? taskDTO.getName() : "")
-                .setFlightId(taskDTO.getFlightId() != null ? taskDTO.getFlightId() : "")
                 .setSnNumber(taskDTO.getSnNumber() != null ? taskDTO.getSnNumber() : "")
                 .setAssetId(taskDTO.getAssetId() != null ? taskDTO.getAssetId() : "")
                 .setDescription(taskDTO.getDescription() != null ? taskDTO.getDescription() : "")
-                .setPayloadImagingType(taskDTO.getPayloadImagingType() != null ? taskDTO.getPayloadImagingType() : "")
-                .setFileUrl(taskDTO.getFileUrl() != null ? taskDTO.getFileUrl() : "")
-                .setFileMd5(taskDTO.getFileMd5() != null ? taskDTO.getFileMd5() : "")
-                .setFlightAreaFileUrl(taskDTO.getFlightAreaFileUrl() != null ? taskDTO.getFlightAreaFileUrl() : "")
-                .setFlightAreaChecksum(taskDTO.getFlightAreaChecksum() != null ? taskDTO.getFlightAreaChecksum() : "")
                 .setCurrentStep(taskDTO.getCurrentStep() != null ? taskDTO.getCurrentStep() : "");
 
         if (taskDTO.getMissionId() != null) {
@@ -222,71 +218,14 @@ public class MissionAutonomyImpl implements MissionAutonomy {
             taskProtoBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(taskDTO.getCreatedAt()));
         }
         if (taskDTO.getModifiedAt() != null) {
-            taskProtoBuilder.setUpdatedAt(ProtobufHelpers.toTimestamp(taskDTO.getModifiedAt()));
+            taskProtoBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(taskDTO.getModifiedAt()));
         }
-        if (taskDTO.getFlyToWaylineMode() != null) {
-            taskProtoBuilder.setFlyToWaylineMode(taskDTO.getFlyToWaylineMode());
-        }
-        if (taskDTO.getWaylineFinishAction() != null) {
-            taskProtoBuilder.setWaylineFinishAction(taskDTO.getWaylineFinishAction());
-        }
-        if (taskDTO.getExitWaylineWhenRcLostEnum() != null) {
-            taskProtoBuilder.setExitWaylineWhenRcLostEnum(taskDTO.getExitWaylineWhenRcLostEnum());
-        }
-        if (taskDTO.getRcLostActionEnum() != null) {
-            taskProtoBuilder.setRcLostActionEnum(taskDTO.getRcLostActionEnum());
-        }
-        if (taskDTO.getTakeOffSecurityHeight() != null) {
-            taskProtoBuilder.setTakeOffSecurityHeight(taskDTO.getTakeOffSecurityHeight());
-        }
-        if (taskDTO.getGlobalTransitionSpeed() != null) {
-            taskProtoBuilder.setGlobalTransitionSpeed(taskDTO.getGlobalTransitionSpeed());
-        }
-        if (taskDTO.getWaylineType() != null) {
-            taskProtoBuilder.setWaylineType(taskDTO.getWaylineType());
-        }
-        if (taskDTO.getWaylineTurnMode() != null) {
-            taskProtoBuilder.setWaylineTurnMode(taskDTO.getWaylineTurnMode());
-        }
-        if (taskDTO.getUseStraightLine() != null) {
-            taskProtoBuilder.setUseStraightLine(taskDTO.getUseStraightLine());
-        }
-        if (taskDTO.getGimbalPitchMode() != null) {
-            taskProtoBuilder.setGimbalPitchMode(taskDTO.getGimbalPitchMode());
-        }
-        if (taskDTO.getGlobalGimbalPitch() != null) {
-            taskProtoBuilder.setGlobalGimbalPitch(taskDTO.getGlobalGimbalPitch());
-        }
-        if (taskDTO.getGlobalSpeed() != null) {
-            taskProtoBuilder.setGlobalSpeed(taskDTO.getGlobalSpeed());
-        }
-        if (taskDTO.getGlobalHeight() != null) {
-            taskProtoBuilder.setGlobalHeight(taskDTO.getGlobalHeight());
-        }
-        if (taskDTO.getRthAltitude() != null) {
-            taskProtoBuilder.setRthAltitude(taskDTO.getRthAltitude());
-        }
-        if (taskDTO.getRthMode() != null) {
-            taskProtoBuilder.setRthMode(taskDTO.getRthMode());
-        }
-        if (taskDTO.getRthSpeed() != null) {
-            taskProtoBuilder.setRthSpeed(taskDTO.getRthSpeed());
-        }
-        if (taskDTO.getOutOfControlAction() != null) {
-            taskProtoBuilder.setOutOfControlAction(taskDTO.getOutOfControlAction());
-        }
-        if (taskDTO.getWaylinePrecisionType() != null) {
-            taskProtoBuilder.setWaylinePrecisionType(taskDTO.getWaylinePrecisionType());
-        }
+     
         if (taskDTO.getCurrentProgress() != null) {
             taskProtoBuilder.setCurrentProgress(taskDTO.getCurrentProgress());
         }
         if (taskDTO.getBreakReason() != null) {
             taskProtoBuilder.setBreakReason(taskDTO.getBreakReason());
-        }
-
-        if (!taskDTO.getWaypoints().isEmpty()) {
-            taskProtoBuilder.addAllWaypoints(mapWaypointsDtoToProto(taskDTO.getWaypoints()));
         }
         return taskProtoBuilder;
     }
@@ -303,7 +242,6 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .setVehicleAction(waypointDTO.getVehicleAction())
                     .setGimbalPitch(waypointDTO.getGimbalPitch())
                     .setFlyTrough(waypointDTO.getFlyThrough())
-                    .setTaskId(String.valueOf(waypointDTO.getTask()))
                     .build());
         });
         return waypointProtoDTOS;
@@ -585,7 +523,6 @@ public class MissionAutonomyImpl implements MissionAutonomy {
             builder.taskData(TaskResponse.TaskData.builder()
                     .taskId(proto.getTaskDTO().hasId() ? proto.getTaskDTO().getId() : null)
                     .name(proto.getTaskDTO().hasName() ? proto.getTaskDTO().getName() : null)
-                    .flightId(proto.getTaskDTO().hasFlightId() ? proto.getTaskDTO().getFlightId() : null)
                     .assetSn(proto.getTaskDTO().hasSnNumber() ? proto.getTaskDTO().getSnNumber() : null)
                     .build());
         }
