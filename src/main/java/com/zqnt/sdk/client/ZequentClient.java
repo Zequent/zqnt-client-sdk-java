@@ -108,6 +108,19 @@ public class ZequentClient implements AutoCloseable {
     @Override
     public void close() {
         log.info("Shutting down ZequentClient with {} channels", channels.size());
+
+        // Shutdown service implementations first
+        if (remoteControl instanceof RemoteControlImpl) {
+            ((RemoteControlImpl) remoteControl).shutdown();
+        }
+        if (missionAutonomy instanceof MissionAutonomyImpl) {
+            ((MissionAutonomyImpl) missionAutonomy).shutdown();
+        }
+        if (liveData instanceof LiveDataImpl) {
+            ((LiveDataImpl) liveData).shutdown();
+        }
+
+        // Then shutdown channels
         for (ManagedChannel channel : channels) {
             try {
                 channel.shutdown();

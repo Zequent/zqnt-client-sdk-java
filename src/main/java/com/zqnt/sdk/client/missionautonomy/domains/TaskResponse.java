@@ -1,5 +1,6 @@
-package com.zqnt.sdk.client.remotecontrol.domains;
+package com.zqnt.sdk.client.missionautonomy.domains;
 
+import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +19,7 @@ public class TaskResponse {
     private LocalDateTime timestamp;
     private ErrorInfo error;
     private ProgressInfo progress;
-    private TaskData taskData;
+    private TaskDTO taskData;
 
     @Data
     @Builder
@@ -40,14 +41,4 @@ public class TaskResponse {
         private float leftTimeInSeconds;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class TaskData {
-        private String taskId;
-        private String name;
-        private String flightId;
-        private String assetSn;
-    }
 }

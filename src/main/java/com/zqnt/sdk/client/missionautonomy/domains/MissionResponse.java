@@ -1,5 +1,6 @@
 package com.zqnt.sdk.client.missionautonomy.domains;
 
+import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +19,7 @@ public class MissionResponse {
     private LocalDateTime timestamp;
     private ErrorInfo error;
     private ProgressInfo progress;
-    private MissionData missionData;
+    private MissionDTO missionData;
 
     @Data
     @Builder
@@ -40,14 +41,4 @@ public class MissionResponse {
         private float leftTimeInSeconds;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class MissionData {
-        private String missionId;
-        private String name;
-        private String description;
-        private String assetSn;
-    }
 }
