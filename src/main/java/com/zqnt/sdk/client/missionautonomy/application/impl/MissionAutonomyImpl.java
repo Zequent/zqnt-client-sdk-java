@@ -1,13 +1,13 @@
 package com.zqnt.sdk.client.missionautonomy.application.impl;
 
-import com.zequent.framework.common.proto.*;
+import com.zqnt.utils.common.proto.*;
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
 import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
-import com.zequent.framework.services.mission.proto.*;
+import com.zqnt.utils.mission.proto.*;
 import com.zqnt.utils.JsonUtils;
 import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
@@ -457,7 +457,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
     }
 
-    private MissionResponse toMissionResponse(com.zequent.framework.services.mission.proto.MissionResponse proto) {
+    private MissionResponse toMissionResponse(com.zqnt.utils.mission.proto.MissionResponse proto) {
         var builder = MissionResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -502,7 +502,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         return builder.build();
     }
 
-    private TaskResponse toTaskResponse(com.zequent.framework.services.mission.proto.TaskResponse proto) {
+    private TaskResponse toTaskResponse(com.zqnt.utils.mission.proto.TaskResponse proto) {
         var builder = TaskResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -533,7 +533,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         return builder.build();
     }
 
-    private SchedulerResponse toSchedulerResponse(com.zequent.framework.services.mission.proto.SchedulerResponse proto) {
+    private SchedulerResponse toSchedulerResponse(com.zqnt.utils.mission.proto.SchedulerResponse proto) {
         var builder = SchedulerResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())

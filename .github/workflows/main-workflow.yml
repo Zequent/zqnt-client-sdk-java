@@ -34,6 +34,8 @@ jobs:
     needs: test-and-build-java
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history for git describe
 
       - uses: actions/setup-java@v5
         with:
@@ -41,8 +43,46 @@ jobs:
           java-version: 21
           cache: maven
 
+      - name: Generate version with commit SHA
+        id: version
+        run: |
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          BASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
+
+          # For SNAPSHOT: version stays same but add build metadata
+          echo "version=${BASE_VERSION}-SNAPSHOT" >> $GITHUB_OUTPUT
+          echo "commit_sha=${COMMIT_SHA}" >> $GITHUB_OUTPUT
+          echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+
+          echo "📦 Publishing version: ${BASE_VERSION}-SNAPSHOT"
+          echo "🔖 Commit: ${COMMIT_SHA}"
+          echo "⏰ Timestamp: ${TIMESTAMP}"
+
       - name: Publish to GitHub Packages
-        run: mvn -B deploy --settings .github/settings.xml
+        run: |
+          mvn -B deploy --settings .github/settings.xml \
+            -Drevision=${{ steps.version.outputs.version }} \
+            -Dchangelist= \
+            -Dsha1=.git-${{ steps.version.outputs.commit_sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Create deployment summary
+        run: |
+          echo "### 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ steps.version.outputs.commit_sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: ${{ steps.version.outputs.timestamp }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Actor**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Maven Dependency:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`xml" >> $GITHUB_STEP_SUMMARY
+          echo "<dependency>" >> $GITHUB_STEP_SUMMARY
+          echo "    <groupId>com.zqnt.sdk</groupId>" >> $GITHUB_STEP_SUMMARY
+          echo "    <artifactId>client-sdk</artifactId>" >> $GITHUB_STEP_SUMMARY
+          echo "    <version>${{ steps.version.outputs.version }}</version>" >> $GITHUB_STEP_SUMMARY
+          echo "</dependency>" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

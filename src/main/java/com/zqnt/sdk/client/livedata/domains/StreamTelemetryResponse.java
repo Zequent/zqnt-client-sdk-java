@@ -1,6 +1,6 @@
 package com.zqnt.sdk.client.livedata.domains;
 
-import com.zequent.framework.common.proto.ErrorCodes;
+import com.zqnt.utils.common.proto.ErrorCode;
 import com.zqnt.utils.edge.sdk.domains.AssetTelemetryData;
 import com.zqnt.utils.edge.sdk.domains.SubAssetTelemetryData;
 import lombok.*;
@@ -29,7 +29,7 @@ public class StreamTelemetryResponse {
 	@NoArgsConstructor
 	@AllArgsConstructor
 	public static class ErrorInfo {
-		private ErrorCodes errorCode;
+		private ErrorCode errorCode;
 		private String errorMessage;
 		private LocalDateTime timestamp;
 	}

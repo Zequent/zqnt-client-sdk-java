@@ -12,9 +12,9 @@ import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
 import com.zqnt.sdk.client.remotecontrol.domains.ReturnToHomeRequest;
 import com.zqnt.sdk.client.remotecontrol.domains.TakeoffRequest;
 import com.zqnt.sdk.client.remotecontrol.domains.TakeoffResponse;
-import com.zequent.framework.common.proto.Coordinates;
-import com.zequent.framework.common.proto.RequestBase;
-import com.zequent.framework.services.remote.proto.*;
+import com.zqnt.utils.common.proto.Coordinates;
+import com.zqnt.utils.common.proto.RequestBase;
+import com.zqnt.utils.remotecontrol.proto.*;
 import com.zqnt.utils.core.ProtobufHelpers;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
@@ -80,9 +80,9 @@ public class RemoteControlImpl implements RemoteControl {
 	public CompletableFuture<TakeoffResponse> takeoff(TakeoffRequest request) {
 		log.info("Takeoff: sn={}", request.getSn());
 
-		var protoRequest = com.zequent.framework.services.remote.proto.RemoteControlTakeOffRequest.newBuilder()
+		var protoRequest = com.zqnt.utils.remotecontrol.proto.RemoteControlTakeOffRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setRequest(com.zequent.framework.common.proto.Coordinates.newBuilder()
+				.setRequest(com.zqnt.utils.common.proto.Coordinates.newBuilder()
 						.setLatitude(request.getLatitude())
 						.setLongitude(request.getLongitude())
 						.setAltitude(request.getAltitude())
@@ -115,7 +115,7 @@ public class RemoteControlImpl implements RemoteControl {
 			ReturnToHomeRequest request) {
 		log.info("ReturnToHome: sn={}", request.getSn());
 
-		var rthBuilder = com.zequent.framework.common.proto.ReturnToHomeRequest.newBuilder();
+		var rthBuilder = com.zqnt.utils.common.proto.ReturnToHomeRequest.newBuilder();
 		if (request.getAltitude() != null) {
 			rthBuilder.setAltitude(request.getAltitude());
 		}
@@ -151,7 +151,7 @@ public class RemoteControlImpl implements RemoteControl {
 			ManualControlRequest request) {
 		log.info("EnterManualControl: sn={}", request.getSn());
 
-		var manualControlBuilder = com.zequent.framework.common.proto.ManualControlRequest.newBuilder()
+		var manualControlBuilder = com.zqnt.utils.common.proto.ManualControlRequest.newBuilder()
 				.setClientId(request.getClientId())
 				.setUserId(request.getUserId())
 				.setSessionId(request.getSessionId());
@@ -174,7 +174,7 @@ public class RemoteControlImpl implements RemoteControl {
 			ManualControlRequest request) {
 		log.info("ExitManualControl: sn={}", request.getSn());
 
-		var manualControlBuilder = com.zequent.framework.common.proto.ManualControlRequest.newBuilder()
+		var manualControlBuilder = com.zqnt.utils.common.proto.ManualControlRequest.newBuilder()
 				.setClientId(request.getClientId())
 				.setUserId(request.getUserId())
 				.setSessionId(request.getSessionId());
@@ -197,13 +197,13 @@ public class RemoteControlImpl implements RemoteControl {
 		log.info("Starting manual control input session for SN: {}", sn);
 
 		// CompletableFuture to capture the final response
-		var responseFuture = new CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse>();
+		var responseFuture = new CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse>();
 
 		// Response observer to handle server responses
-		StreamObserver<com.zequent.framework.services.remote.proto.RemoteControlResponse> responseObserver =
+		StreamObserver<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> responseObserver =
 			new StreamObserver<>() {
 				@Override
-				public void onNext(com.zequent.framework.services.remote.proto.RemoteControlResponse response) {
+				public void onNext(com.zqnt.utils.remotecontrol.proto.RemoteControlResponse response) {
 					responseFuture.complete(response);
 				}
 
@@ -327,7 +327,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
-	private com.zequent.framework.common.proto.RequestBase buildBase(String sn) {
+	private com.zqnt.utils.common.proto.RequestBase buildBase(String sn) {
 		var builder = RequestBase.newBuilder()
 				.setSn(sn)
 				.setTid(UUID.randomUUID().toString())
@@ -340,12 +340,12 @@ public class RemoteControlImpl implements RemoteControl {
 	 * Execute async gRPC call with resilience and timeout using StreamObserver pattern.
 	 * AsyncStub is the most performant approach (callback-based, non-blocking).
 	 */
-	private CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> executeAsync(
-			java.util.function.Consumer<StreamObserver<com.zequent.framework.services.remote.proto.RemoteControlResponse>> stubCall) {
+	private CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> executeAsync(
+			java.util.function.Consumer<StreamObserver<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse>> stubCall) {
 		int timeout = config.getRequestTimeoutSeconds();
 
 		return resilience.executeWithResilienceAsync(() -> {
-			CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> future = new CompletableFuture<>();
+			CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> future = new CompletableFuture<>();
 			AtomicBoolean completed = new AtomicBoolean(false);
 
 			// Set timeout
@@ -356,9 +356,9 @@ public class RemoteControlImpl implements RemoteControl {
 			}, timeout, TimeUnit.SECONDS);
 
 			// StreamObserver for callback-based async handling
-			StreamObserver<com.zequent.framework.services.remote.proto.RemoteControlResponse> observer = new StreamObserver<>() {
+			StreamObserver<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> observer = new StreamObserver<>() {
 				@Override
-				public void onNext(com.zequent.framework.services.remote.proto.RemoteControlResponse response) {
+				public void onNext(com.zqnt.utils.remotecontrol.proto.RemoteControlResponse response) {
 					if (completed.compareAndSet(false, true)) {
 						timeoutTask.cancel(false);
 						future.complete(response);
@@ -402,7 +402,7 @@ public class RemoteControlImpl implements RemoteControl {
 		}
 	}
 
-	private TakeoffResponse toTakeoffResponse(com.zequent.framework.services.remote.proto.RemoteControlResponse proto, String sn) {
+	private TakeoffResponse toTakeoffResponse(com.zqnt.utils.remotecontrol.proto.RemoteControlResponse proto, String sn) {
 		return TakeoffResponse.builder()
 				.success(!proto.getHasErrors())
 				.sn(sn)
@@ -423,7 +423,7 @@ public class RemoteControlImpl implements RemoteControl {
 	}
 
 	private RemoteControlResponse toResponse(
-			com.zequent.framework.services.remote.proto.RemoteControlResponse proto, String sn) {
+			com.zqnt.utils.remotecontrol.proto.RemoteControlResponse proto, String sn) {
 		return RemoteControlResponse.builder()
 				.success(!proto.getHasErrors())
 				.sn(sn)
