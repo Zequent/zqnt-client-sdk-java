@@ -3,8 +3,8 @@ package com.zqnt.sdk.client.remotecontrol.application.impl;
 import com.zqnt.sdk.client.remotecontrol.application.ManualControlInputSession;
 import com.zqnt.sdk.client.remotecontrol.domains.ManualControlInput;
 import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
-import com.zequent.framework.common.proto.RequestBase;
-import com.zequent.framework.services.remote.proto.RemoteControlManualControlInputRequest;
+import com.zqnt.utils.common.proto.RequestBase;
+import com.zqnt.utils.remotecontrol.proto.RemoteControlManualControlInputRequest;
 import com.zqnt.utils.core.ProtobufHelpers;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
@@ -21,13 +21,13 @@ import java.util.concurrent.TimeUnit;
 public class ManualControlInputSessionImpl implements ManualControlInputSession {
 
     private final StreamObserver<RemoteControlManualControlInputRequest> requestObserver;
-    private final CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> responseFuture;
+    private final CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> responseFuture;
     private final String sn;
     private boolean completed = false;
 
     public ManualControlInputSessionImpl(
             String sn,
-            CompletableFuture<com.zequent.framework.services.remote.proto.RemoteControlResponse> responseFuture,
+            CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> responseFuture,
             StreamObserver<RemoteControlManualControlInputRequest> requestObserver) {
         this.sn = sn;
         this.responseFuture = responseFuture;
@@ -43,7 +43,7 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
         log.debug("Sending manual control input for SN: {}, roll={}, pitch={}, yaw={}, throttle={}, gimbalPitch={}",
                 sn, input.getRoll(), input.getPitch(), input.getYaw(), input.getThrottle(), input.getGimbalPitch());
 
-        var builder = com.zequent.framework.common.proto.ManualControlInput.newBuilder();
+        var builder = com.zqnt.utils.common.proto.ManualControlInput.newBuilder();
 
         if (input.getRoll() != null) {
             builder.setRoll(input.getRoll());
@@ -118,7 +118,7 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
         return builder.build();
     }
 
-    private RemoteControlResponse toResponse(com.zequent.framework.services.remote.proto.RemoteControlResponse proto) {
+    private RemoteControlResponse toResponse(com.zqnt.utils.remotecontrol.proto.RemoteControlResponse proto) {
         return RemoteControlResponse.builder()
                 .success(!proto.getHasErrors())
                 .sn(sn)

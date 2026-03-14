@@ -1,7 +1,8 @@
 package com.zqnt.sdk.client.livedata.domains;
 
-import com.zequent.framework.common.proto.AssetTypeEnum;
-import com.zequent.framework.common.proto.LiveStreamTypeEnum;
+
+import com.zqnt.utils.common.proto.AssetTypeEnum;
+import com.zqnt.utils.common.proto.LiveStreamTypeEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

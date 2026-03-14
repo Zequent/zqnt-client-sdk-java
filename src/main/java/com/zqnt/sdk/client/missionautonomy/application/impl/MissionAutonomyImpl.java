@@ -1,13 +1,15 @@
 package com.zqnt.sdk.client.missionautonomy.application.impl;
 
-import com.zequent.framework.common.proto.*;
+import com.zqnt.utils.common.proto.*;
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
 import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
-import com.zqnt.sdk.client.remotecontrol.domains.TaskResponse;
-import com.zequent.framework.services.mission.proto.*;
+import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
+import com.zqnt.utils.mission.proto.*;
+import com.zqnt.utils.JsonUtils;
+import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
@@ -17,9 +19,7 @@ import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.*;
 
 /**
@@ -457,7 +457,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
     }
 
-    private MissionResponse toMissionResponse(com.zequent.framework.services.mission.proto.MissionResponse proto) {
+    private MissionResponse toMissionResponse(com.zqnt.utils.mission.proto.MissionResponse proto) {
         var builder = MissionResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -481,22 +481,28 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
 
         if (proto.hasMissionDTO()) {
-            var missionData = MissionResponse.MissionData.builder()
-                    .missionId(proto.getMissionDTO().hasId() ? proto.getMissionDTO().getId() : null)
+         /*   var missionDTO = MissionDTO.builder()
+                    .id(proto.getMissionDTO().hasId() ? UUID.fromString(proto.getMissionDTO().getId()) : null)
                     .name(proto.getMissionDTO().getName())
-                    .description(proto.getMissionDTO().getDescription());
+                    .description(proto.getMissionDTO().getDescription())
+                    .endDate(ProtobufHelpers.toLocalDateTime(proto.getMissionDTO().getEndDate()))
+                    .startDate(ProtobufHelpers.toLocalDateTime(proto.getMissionDTO().getStartDate()))
+                    .geoJson(proto.getMissionDTO().getGeoJson())
+                    .status(proto.getMissionDTO().getStatus());
 
             if (proto.getMissionDTO().getAssignedAssetsCount() > 0) {
-                missionData.assetSn(proto.getMissionDTO().getAssignedAssets(0));
-            }
+                missionDTO.assignedAssets(new HashSet<>(proto.getMissionDTO().getAssignedAssetsList()));
+            }*/
+            var json = ProtoJsonUtils.toJson(proto.getMissionDTO());
+            var missionDTO = JsonUtils.fromJson(json, MissionDTO.class);
 
-            builder.missionData(missionData.build());
+            builder.missionData(missionDTO);
         }
 
         return builder.build();
     }
 
-    private TaskResponse toTaskResponse(com.zequent.framework.services.mission.proto.TaskResponse proto) {
+    private TaskResponse toTaskResponse(com.zqnt.utils.mission.proto.TaskResponse proto) {
         var builder = TaskResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -520,17 +526,14 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
 
         if (proto.hasTaskDTO()) {
-            builder.taskData(TaskResponse.TaskData.builder()
-                    .taskId(proto.getTaskDTO().hasId() ? proto.getTaskDTO().getId() : null)
-                    .name(proto.getTaskDTO().hasName() ? proto.getTaskDTO().getName() : null)
-                    .assetSn(proto.getTaskDTO().hasSnNumber() ? proto.getTaskDTO().getSnNumber() : null)
-                    .build());
+            var json = ProtoJsonUtils.toJson(proto.getTaskDTO());
+            builder.taskData(JsonUtils.fromJson(json, TaskDTO.class));
         }
 
         return builder.build();
     }
 
-    private SchedulerResponse toSchedulerResponse(com.zequent.framework.services.mission.proto.SchedulerResponse proto) {
+    private SchedulerResponse toSchedulerResponse(com.zqnt.utils.mission.proto.SchedulerResponse proto) {
         var builder = SchedulerResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -554,12 +557,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
 
         if (proto.hasSchedulerDTO()) {
-            builder.schedulerData(SchedulerResponse.SchedulerData.builder()
-                    .schedulerId(proto.getSchedulerDTO().getId())
-                    .name(proto.getSchedulerDTO().getName())
-                    .startDate(null)
-                    .endDate(null)
-                    .build());
+            var json = ProtoJsonUtils.toJson(proto.getSchedulerDTO());
+            builder.schedulerData(JsonUtils.fromJson(json, SchedulerDTO.class));
         }
 
         return builder.build();

@@ -39,7 +39,9 @@ public class ChannelFactory {
                 .keepAliveTime(30, TimeUnit.SECONDS)
                 .keepAliveTimeout(10, TimeUnit.SECONDS)
                 .keepAliveWithoutCalls(true)
-                .idleTimeout(5, TimeUnit.MINUTES);
+                .idleTimeout(5, TimeUnit.MINUTES)
+                .enableRetry()
+                .maxRetryAttempts(5);
 
         // Configure TLS
         if (config.isUsePlaintext()) {

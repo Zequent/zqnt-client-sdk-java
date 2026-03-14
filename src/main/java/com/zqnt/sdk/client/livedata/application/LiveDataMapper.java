@@ -8,8 +8,8 @@ import com.zqnt.sdk.client.livedata.domains.LiveDataStartLiveStreamRequest;
 import com.zqnt.sdk.client.livedata.domains.LiveDataStopLiveStreamRequest;
 import com.zqnt.sdk.client.livedata.domains.StreamTelemetryRequest;
 import com.zqnt.sdk.client.livedata.domains.StreamTelemetryResponse;
-import com.zequent.framework.common.proto.*;
-import com.zequent.framework.services.livedata.proto.*;
+import com.zqnt.utils.common.proto.*;
+import com.zqnt.utils.livedata.proto.*;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.edge.sdk.domains.AssetTelemetryData;
 import com.zqnt.utils.edge.sdk.domains.SubAssetTelemetryData;
@@ -278,19 +278,19 @@ public class LiveDataMapper {
     /**
      * Maps LiveDataStartLiveStreamRequest POJO to proto
      */
-    public com.zequent.framework.services.livedata.proto.LiveDataStartLiveStreamRequest toProtoStartLiveStreamRequest(
+    public com.zqnt.utils.livedata.proto.LiveDataStartLiveStreamRequest toProtoStartLiveStreamRequest(
             LiveDataStartLiveStreamRequest request) {
         if (request == null) {
             return null;
         }
 
-        var requestBuilder = com.zequent.framework.services.livedata.proto.LiveStreamStartRequest.newBuilder()
+        var requestBuilder = com.zqnt.utils.livedata.proto.LiveStreamStartRequest.newBuilder()
                 .setVideoId(request.getVideoId())
                 .setStreamServer(request.getStreamServer())
                 .setStreamType(request.getStreamType())
                 .setAssetType(request.getAssetType());
 
-        return com.zequent.framework.services.livedata.proto.LiveDataStartLiveStreamRequest.newBuilder()
+        return com.zqnt.utils.livedata.proto.LiveDataStartLiveStreamRequest.newBuilder()
                 .setBase(RequestBase.newBuilder()
                         .setSn(request.getSn())
                         .setTid(UUID.randomUUID().toString())
@@ -302,16 +302,16 @@ public class LiveDataMapper {
     /**
      * Maps LiveDataStopLiveStreamRequest POJO to proto
      */
-    public com.zequent.framework.services.livedata.proto.LiveDataStopLiveStreamRequest toProtoStopLiveStreamRequest(
+    public com.zqnt.utils.livedata.proto.LiveDataStopLiveStreamRequest toProtoStopLiveStreamRequest(
             LiveDataStopLiveStreamRequest request) {
         if (request == null) {
             return null;
         }
 
-        var requestBuilder = com.zequent.framework.services.livedata.proto.LiveStreamStopRequest.newBuilder()
+        var requestBuilder = com.zqnt.utils.livedata.proto.LiveStreamStopRequest.newBuilder()
                 .setVideoId(request.getVideoId());
 
-        return com.zequent.framework.services.livedata.proto.LiveDataStopLiveStreamRequest.newBuilder()
+        return com.zqnt.utils.livedata.proto.LiveDataStopLiveStreamRequest.newBuilder()
                 .setBase(RequestBase.newBuilder()
                         .setSn(request.getSn())
                         .setTid(request.getTid() != null ? request.getTid() : UUID.randomUUID().toString())
@@ -324,7 +324,7 @@ public class LiveDataMapper {
      * Maps proto LiveDataResponse to POJO
      */
     public LiveDataResponse fromProtoLiveDataResponse(
-            com.zequent.framework.services.livedata.proto.LiveDataResponse protoResponse) {
+            com.zqnt.utils.livedata.proto.LiveDataResponse protoResponse) {
         if (protoResponse == null) {
             return null;
         }
