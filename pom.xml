@@ -132,9 +132,8 @@
         <dependency>
             <groupId>com.zqnt</groupId>
             <artifactId>zqnt-utils</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>1.0.0-PR1-12a925f-SNAPSHOT</version>
         </dependency>
-
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
