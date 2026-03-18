@@ -134,7 +134,6 @@
             <artifactId>zqnt-utils</artifactId>
             <version>1.0.0</version>
         </dependency>
-
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -1,5 +1,6 @@
 package com.zqnt.sdk.client.missionautonomy.domains;
 
+import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +19,7 @@ public class SchedulerResponse {
     private LocalDateTime timestamp;
     private ErrorInfo error;
     private ProgressInfo progress;
-    private SchedulerData schedulerData;
+    private SchedulerDTO schedulerData;
 
     @Data
     @Builder
@@ -40,14 +41,4 @@ public class SchedulerResponse {
         private float leftTimeInSeconds;
     }
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class SchedulerData {
-        private String schedulerId;
-        private String name;
-        private LocalDateTime startDate;
-        private LocalDateTime endDate;
-    }
 }

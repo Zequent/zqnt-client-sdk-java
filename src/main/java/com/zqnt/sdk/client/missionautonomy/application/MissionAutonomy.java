@@ -5,7 +5,7 @@ import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
-import com.zqnt.sdk.client.remotecontrol.domains.TaskResponse;
+import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
 
 import java.util.concurrent.CompletableFuture;
 
