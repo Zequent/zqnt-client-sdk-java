@@ -135,7 +135,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
             missionBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(missionDTO.getCreatedAt()));
         }
         if (missionDTO.getModifiedAt() != null) {
-            missionBuilder.setUpdatedAt(ProtobufHelpers.toTimestamp(missionDTO.getModifiedAt()));
+            missionBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(missionDTO.getModifiedAt()));
         }
         return missionBuilder;
     }
