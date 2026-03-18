@@ -5,7 +5,7 @@ import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
 import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
-import com.zqnt.sdk.client.remotecontrol.domains.TaskResponse;
+import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
 import com.zqnt.utils.common.proto.*;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.mission.proto.*;
