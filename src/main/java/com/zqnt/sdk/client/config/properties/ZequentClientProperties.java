@@ -24,6 +24,7 @@ import io.smallrye.config.WithName;
 @ConfigMapping(prefix = "zequent")
 public interface ZequentClientProperties {
 
+
     /**
      * Remote Control Service configuration.
      */
