@@ -201,17 +201,23 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
 
-    //TODO fix the sdks
     private static TaskProtoDTO.@NonNull Builder mapTaskDtoToProto(TaskProtoDTO.Builder taskId, TaskDTO taskDTO) {
         var taskProtoBuilder = taskId
                 .setName(taskDTO.getName() != null ? taskDTO.getName() : "")
                 .setSnNumber(taskDTO.getSnNumber() != null ? taskDTO.getSnNumber() : "")
                 .setAssetId(taskDTO.getAssetId() != null ? taskDTO.getAssetId() : "")
                 .setDescription(taskDTO.getDescription() != null ? taskDTO.getDescription() : "")
-                .setCurrentStep(taskDTO.getCurrentStep() != null ? taskDTO.getCurrentStep() : "");
+                .setCurrentStep(taskDTO.getCurrentStep() != null ? taskDTO.getCurrentStep() : "")
+                .setModifiedFrom(taskDTO.getModifiedFrom() != null ? taskDTO.getModifiedFrom() : "");
 
         if (taskDTO.getMissionId() != null) {
             taskProtoBuilder.setMissionId(taskDTO.getMissionId().toString());
+        }
+        if (taskDTO.getTaskType() != null) {
+            taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()));
+        }
+        if (taskDTO.getConfig() != null) {
+            taskProtoBuilder.setConfig(JsonUtils.toJson(taskDTO.getConfig()));
         }
         if (taskDTO.getStatus() != null) {
             taskProtoBuilder.setStatus(taskDTO.getStatus());
@@ -222,7 +228,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (taskDTO.getModifiedAt() != null) {
             taskProtoBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(taskDTO.getModifiedAt()));
         }
-     
+
         if (taskDTO.getCurrentProgress() != null) {
             taskProtoBuilder.setCurrentProgress(taskDTO.getCurrentProgress());
         }
