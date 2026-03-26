@@ -132,7 +132,7 @@
         <dependency>
             <groupId>com.zqnt</groupId>
             <artifactId>zqnt-utils</artifactId>
-            <version>1.0.3-PR2-49047f5-SNAPSHOT</version>
+            <version>1.0.3-PR2-f7bcd35-SNAPSHOT</version>
         </dependency>
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
