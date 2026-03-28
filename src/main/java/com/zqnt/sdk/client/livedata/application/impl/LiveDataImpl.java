@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -95,43 +96,54 @@ public class LiveDataImpl implements LiveData {
 		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
 		AtomicBoolean completed = new AtomicBoolean(false);
+		AtomicReference<ScheduledFuture<?>> timeoutRef = new AtomicReference<>();
 
-		// Timeout task
-		ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-			if (!completed.get()) {
-				String msg = "Stream timed out after " + timeout + " seconds";
-				log.warn(msg);
-				if (onError != null) {
-					onError.accept(new TimeoutException(msg));
-				}
-			}
-		}, timeout, TimeUnit.SECONDS);
+		// Schedules (or resets) the inactivity timeout
+		Runnable scheduleTimeout = () -> {
+			ScheduledFuture<?> prev = timeoutRef.getAndSet(
+				timeoutScheduler.schedule(() -> {
+					if (!completed.get()) {
+						String msg = "Stream timed out after " + timeout + " seconds of inactivity";
+						log.warn(msg);
+						if (onError != null) {
+							onError.accept(new TimeoutException(msg));
+						}
+					}
+				}, timeout, TimeUnit.SECONDS)
+			);
+			if (prev != null) prev.cancel(false);
+		};
+
+		scheduleTimeout.run();
 
 		StreamObserver<LiveDataTelemetryResponse> observer =
 			new StreamObserver<>() {
 				@Override
 				public void onNext(LiveDataTelemetryResponse protoResponse) {
-					try {
-						// Reset timeout on each received item
-						timeoutTask.cancel(false);
+					// Reset inactivity timeout on each received item
+					scheduleTimeout.run();
 
-						// Map to POJO and invoke callback
-						var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
-						onData.accept(pojoResponse);
-
-						resilience.recordSuccess();
-					} catch (Exception e) {
-						log.error("Error processing stream item: {}", e.getMessage(), e);
-						if (onError != null) {
-							onError.accept(e);
+					// Map to POJO and dispatch to separate thread so the gRPC delivery
+					// thread is freed immediately (prevents flow-control stall after ~80 msgs)
+					var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
+					streamExecutor.execute(() -> {
+						try {
+							onData.accept(pojoResponse);
+							resilience.recordSuccess();
+						} catch (Exception e) {
+							log.error("Error processing stream item: {}", e.getMessage(), e);
+							if (onError != null) {
+								onError.accept(e);
+							}
 						}
-					}
+					});
 				}
 
 				@Override
 				public void onError(Throwable error) {
 					completed.set(true);
-					timeoutTask.cancel(false);
+					ScheduledFuture<?> t = timeoutRef.get();
+					if (t != null) t.cancel(false);
 
 					log.error("Stream error: {}", error.getMessage(), error);
 					resilience.recordFailure(error);
@@ -144,22 +156,20 @@ public class LiveDataImpl implements LiveData {
 				@Override
 				public void onCompleted() {
 					completed.set(true);
-					timeoutTask.cancel(false);
+					ScheduledFuture<?> t = timeoutRef.get();
+					if (t != null) t.cancel(false);
 					log.debug("Stream completed successfully");
 				}
 			};
 
-		// Execute stream call asynchronously
-		streamExecutor.execute(() -> {
-			try {
-				asyncStub.streamTelemetry(protoRequest, observer);
-			} catch (Exception e) {
-				log.error("Failed to start stream: {}", e.getMessage(), e);
-				if (onError != null) {
-					onError.accept(e);
-				}
+		try {
+			asyncStub.streamTelemetry(protoRequest, observer);
+		} catch (Exception e) {
+			log.error("Failed to start stream: {}", e.getMessage(), e);
+			if (onError != null) {
+				onError.accept(e);
 			}
-		});
+		}
 	}
 
 	/**

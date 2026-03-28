@@ -48,6 +48,13 @@ public class ChannelFactory {
             channelBuilder.usePlaintext();
         }
 
+        // Configure max inbound message size
+        if (config.getMaxInboundMessageSize() > 0) {
+            channelBuilder.maxInboundMessageSize(config.getMaxInboundMessageSize());
+            log.info("Max inbound message size set to {} bytes for service: {}",
+                    config.getMaxInboundMessageSize(), config.getServiceName());
+        }
+
         ManagedChannel channel = channelBuilder.build();
         log.info("Channel created successfully for service: {}", config.getServiceName());
 

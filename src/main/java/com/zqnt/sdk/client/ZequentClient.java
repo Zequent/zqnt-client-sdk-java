@@ -270,6 +270,7 @@ public class ZequentClient implements AutoCloseable {
         private boolean useStork = false;
         private String storkServiceName;
         private ServiceConfig.LoadBalancerType loadBalancerType;
+        private int maxInboundMessageSize = -1;
 
         ServiceConfigBuilder(ZequentClientBuilder parent, String serviceName) {
             this.parent = parent;
@@ -307,6 +308,11 @@ public class ZequentClient implements AutoCloseable {
             return this;
         }
 
+        public ServiceConfigBuilder maxInboundMessageSize(int maxInboundMessageSize) {
+            this.maxInboundMessageSize = maxInboundMessageSize;
+            return this;
+        }
+
         public ZequentClientBuilder done() {
             return parent;
         }
@@ -320,6 +326,7 @@ public class ZequentClient implements AutoCloseable {
                     .useStork(useStork)
                     .storkServiceName(storkServiceName != null ? storkServiceName : serviceName + "-service")
                     .loadBalancerType(loadBalancerType != null ? loadBalancerType : parent.defaultLoadBalancerType)
+                    .maxInboundMessageSize(maxInboundMessageSize)
                     .build();
         }
 
