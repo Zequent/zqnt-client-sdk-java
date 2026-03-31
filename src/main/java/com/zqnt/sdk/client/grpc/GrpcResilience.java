@@ -119,7 +119,7 @@ public class GrpcResilience {
         checkCircuitBreakerBlocking();
     }
 
-    private void checkCircuitBreakerBlocking() {
+    private synchronized void checkCircuitBreakerBlocking() {
         if (circuitOpen) {
             long now = System.currentTimeMillis();
             if (now - circuitOpenedAt >= circuitBreakerWaitDurationMillis) {
@@ -132,7 +132,7 @@ public class GrpcResilience {
         }
     }
 
-    public void recordSuccess() {
+    public synchronized void recordSuccess() {
         if (failureCount.get() > 0) {
             log.debug("Request succeeded - resetting failure count");
             failureCount.set(0);
@@ -147,10 +147,14 @@ public class GrpcResilience {
         int failures = failureCount.incrementAndGet();
         log.warn("Request failed - failure count: {}/{}", failures, circuitBreakerFailureThreshold);
 
-        if (failures >= circuitBreakerFailureThreshold && !circuitOpen) {
-            circuitOpen = true;
-            circuitOpenedAt = System.currentTimeMillis();
-            log.error("Circuit breaker OPENED after {} failures", failures);
+        if (failures >= circuitBreakerFailureThreshold) {
+            synchronized (this) {
+                if (!circuitOpen) {
+                    circuitOpen = true;
+                    circuitOpenedAt = System.currentTimeMillis();
+                    log.error("Circuit breaker OPENED after {} failures", failures);
+                }
+            }
         }
     }
 

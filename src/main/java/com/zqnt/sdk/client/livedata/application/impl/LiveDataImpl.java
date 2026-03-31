@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -56,12 +57,21 @@ public class LiveDataImpl implements LiveData {
 		this.futureStub = LiveDataServiceGrpc.newFutureStub(channel);
 		this.liveDataMapper = liveDataMapper;
 
-		// Dedicated thread pool for stream processing
-		this.streamExecutor = Executors.newCachedThreadPool(r -> {
+		// Dedicated thread pool for stream processing — fixed size + bounded queue with CallerRunsPolicy
+		// to avoid unbounded thread growth and apply backpressure when the consumer is slow.
+		int coreThreads = Math.max(2, Runtime.getRuntime().availableProcessors());
+		ThreadFactory streamThreadFactory = r -> {
 			Thread t = new Thread(r, "livedata-stream-handler");
 			t.setDaemon(true);
 			return t;
-		});
+		};
+		this.streamExecutor = new ThreadPoolExecutor(
+				coreThreads, coreThreads,
+				60L, TimeUnit.SECONDS,
+				new LinkedBlockingQueue<>(1000),
+				streamThreadFactory,
+				new ThreadPoolExecutor.CallerRunsPolicy()
+		);
 
 		// Scheduler for timeout handling
 		this.timeoutScheduler = Executors.newScheduledThreadPool(1, r -> {
@@ -139,43 +149,49 @@ public class LiveDataImpl implements LiveData {
 
 		AtomicBoolean streamEnded = new AtomicBoolean(false);
 		AtomicBoolean dataReceived = new AtomicBoolean(false);
-		AtomicReference<ScheduledFuture<?>> timeoutRef = new AtomicReference<>();
+		AtomicLong lastReceivedAt = new AtomicLong(System.currentTimeMillis());
+		long inactivityTimeoutMillis = (long) inactivityTimeoutSeconds * 1000;
+		long checkIntervalSeconds = Math.max(10L, inactivityTimeoutSeconds / 6L);
+		AtomicReference<ScheduledFuture<?>> periodicCheckRef = new AtomicReference<>();
 
-		Runnable scheduleTimeout = () -> {
-			ScheduledFuture<?> prev = timeoutRef.getAndSet(
-				timeoutScheduler.schedule(() -> {
-					if (streamEnded.get() || handle.isStopped()) {
-						return;
-					}
-					streamEnded.set(true);
-					log.warn("Stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
+		// Single periodic task instead of reschedule-on-every-message:
+		// avoids ScheduledExecutorService lock contention at high telemetry frequency.
+		ScheduledFuture<?> periodicCheck = timeoutScheduler.scheduleAtFixedRate(() -> {
+			if (streamEnded.get() || handle.isStopped()) {
+				return;
+			}
+			if (System.currentTimeMillis() - lastReceivedAt.get() < inactivityTimeoutMillis) {
+				return;
+			}
+			streamEnded.set(true);
+			ScheduledFuture<?> self = periodicCheckRef.get();
+			if (self != null) self.cancel(false);
 
-					// Reconnect: if data was received before, treat as blip and reset counter
-					int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
+			log.warn("Stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
 
-					if (nextAttempt > maxAttempts) {
-						String msg = "Stream inactive for " + inactivityTimeoutSeconds + "s and max reconnect attempts (" + maxAttempts + ") reached";
-						log.error(msg);
-						if (onError != null) {
-							onError.accept(new TimeoutException(msg));
-						}
-						return;
-					}
+			// Reconnect: if data was received before, treat as blip and reset counter
+			int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
 
-					long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
-					log.warn("Reconnecting after inactivity timeout (attempt {}/{}), delay {}ms",
-							nextAttempt, maxAttempts, delay);
-					timeoutScheduler.schedule(() -> {
-						if (!handle.isStopped()) {
-							startStream(request, onData, onError, handle, nextAttempt);
-						}
-					}, delay, MILLISECONDS);
-				}, inactivityTimeoutSeconds, TimeUnit.SECONDS)
-			);
-			if (prev != null) prev.cancel(false);
-		};
+			if (nextAttempt > maxAttempts) {
+				String msg = "Stream inactive for " + inactivityTimeoutSeconds + "s and max reconnect attempts (" + maxAttempts + ") reached";
+				log.error(msg);
+				if (onError != null) {
+					onError.accept(new TimeoutException(msg));
+				}
+				return;
+			}
 
-		scheduleTimeout.run();
+			long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+			log.warn("Reconnecting after inactivity timeout (attempt {}/{}), delay {}ms",
+					nextAttempt, maxAttempts, delay);
+			timeoutScheduler.schedule(() -> {
+				if (!handle.isStopped()) {
+					startStream(request, onData, onError, handle, nextAttempt);
+				}
+			}, delay, MILLISECONDS);
+		}, checkIntervalSeconds, checkIntervalSeconds, TimeUnit.SECONDS);
+
+		periodicCheckRef.set(periodicCheck);
 
 		StreamObserver<LiveDataTelemetryResponse> observer = new StreamObserver<>() {
 			@Override
@@ -185,11 +201,12 @@ public class LiveDataImpl implements LiveData {
 					return;
 				}
 				dataReceived.set(true);
-				scheduleTimeout.run();
+				lastReceivedAt.set(System.currentTimeMillis());
 
-				var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
+				// Proto-to-POJO mapping is moved into the executor to avoid blocking the gRPC Netty I/O thread.
 				streamExecutor.execute(() -> {
 					try {
+						var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
 						onData.accept(pojoResponse);
 						resilience.recordSuccess();
 					} catch (Exception e) {
@@ -204,8 +221,8 @@ public class LiveDataImpl implements LiveData {
 			@Override
 			public void onError(Throwable error) {
 				streamEnded.set(true);
-				ScheduledFuture<?> t = timeoutRef.get();
-				if (t != null) t.cancel(false);
+				ScheduledFuture<?> check = periodicCheckRef.get();
+				if (check != null) check.cancel(false);
 
 				resilience.recordFailure(error);
 
@@ -238,8 +255,8 @@ public class LiveDataImpl implements LiveData {
 			@Override
 			public void onCompleted() {
 				streamEnded.set(true);
-				ScheduledFuture<?> t = timeoutRef.get();
-				if (t != null) t.cancel(false);
+				ScheduledFuture<?> check = periodicCheckRef.get();
+				if (check != null) check.cancel(false);
 				log.debug("Stream completed");
 			}
 		};

@@ -20,6 +20,7 @@ public class LiveDataMapper {
 
     public static final LiveDataMapper INSTANCE = new LiveDataMapper();
 
+
     private LiveDataMapper() {
 
     }
