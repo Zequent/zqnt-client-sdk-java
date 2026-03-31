@@ -73,6 +73,8 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<TakeoffResponse> takeoff(TakeoffRequest request) {
+		validateSn(request.getSn());
+		validateCoordinates(request.getLatitude(), request.getLongitude(), request.getAltitude());
 		log.info("Takeoff: sn={}", request.getSn());
 
 		var protoRequest = com.zqnt.utils.remotecontrol.proto.RemoteControlTakeOffRequest.newBuilder()
@@ -90,6 +92,8 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> goTo(GoToRequest request) {
+		validateSn(request.getSn());
+		validateCoordinates(request.getLatitude(), request.getLongitude(), request.getAltitude());
 		log.info("GoTo: sn={}", request.getSn());
 
 		var protoRequest = RemoteControlGoToRequest.newBuilder()
@@ -108,6 +112,7 @@ public class RemoteControlImpl implements RemoteControl {
 	@Override
 	public CompletableFuture<RemoteControlResponse> returnToHome(
 			ReturnToHomeRequest request) {
+		validateSn(request.getSn());
 		log.info("ReturnToHome: sn={}", request.getSn());
 
 		var rthBuilder = com.zqnt.utils.common.proto.ReturnToHomeRequest.newBuilder();
@@ -126,6 +131,8 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> lookAt(LookAtRequest request) {
+		validateSn(request.getSn());
+		validateCoordinates(request.getLatitude(), request.getLongitude(), request.getAltitude());
 		log.info("LookAt: sn={}", request.getSn());
 
 		var protoRequest = RemoteControlLookAtRequest.newBuilder()
@@ -144,6 +151,16 @@ public class RemoteControlImpl implements RemoteControl {
 	@Override
 	public CompletableFuture<RemoteControlResponse> enterManualControl(
 			ManualControlRequest request) {
+		validateSn(request.getSn());
+		if (request.getClientId() == null || request.getClientId().isBlank()) {
+			throw new IllegalArgumentException("clientId must not be null or blank");
+		}
+		if (request.getUserId() == null || request.getUserId().isBlank()) {
+			throw new IllegalArgumentException("userId must not be null or blank");
+		}
+		if (request.getSessionId() == null || request.getSessionId().isBlank()) {
+			throw new IllegalArgumentException("sessionId must not be null or blank");
+		}
 		log.info("EnterManualControl: sn={}", request.getSn());
 
 		var manualControlBuilder = com.zqnt.utils.common.proto.ManualControlRequest.newBuilder()
@@ -167,6 +184,16 @@ public class RemoteControlImpl implements RemoteControl {
 	@Override
 	public CompletableFuture<RemoteControlResponse> exitManualControl(
 			ManualControlRequest request) {
+		validateSn(request.getSn());
+		if (request.getClientId() == null || request.getClientId().isBlank()) {
+			throw new IllegalArgumentException("clientId must not be null or blank");
+		}
+		if (request.getUserId() == null || request.getUserId().isBlank()) {
+			throw new IllegalArgumentException("userId must not be null or blank");
+		}
+		if (request.getSessionId() == null || request.getSessionId().isBlank()) {
+			throw new IllegalArgumentException("sessionId must not be null or blank");
+		}
 		log.info("ExitManualControl: sn={}", request.getSn());
 
 		var manualControlBuilder = com.zqnt.utils.common.proto.ManualControlRequest.newBuilder()
@@ -189,6 +216,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public ManualControlInputSession startManualControlInput(String sn, String assetId) {
+		validateSn(sn);
 		log.info("Starting manual control input session for SN: {}", sn);
 
 		// CompletableFuture to capture the final response
@@ -218,11 +246,12 @@ public class RemoteControlImpl implements RemoteControl {
 		StreamObserver<RemoteControlManualControlInputRequest> requestObserver =
 			asyncStub.manualControlInput(responseObserver);
 
-		return new ManualControlInputSessionImpl(sn, responseFuture, requestObserver);
+		return new ManualControlInputSessionImpl(sn, config.getRequestTimeoutSeconds(), responseFuture, requestObserver);
 	}
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> openCover(DockOperationRequest request) {
+		validateSn(request.getSn());
 		log.info("OpenCover: sn={}", request.getSn());
 
 		var protoRequest = RemoteControlOpenCoverRequest.newBuilder()
@@ -235,6 +264,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> closeCover(DockOperationRequest request) {
+		validateSn(request.getSn());
 		log.info("CloseCover: sn={}, force={}", request.getSn(), request.getValue());
 
 		var builder = RemoteControlCloseCoverRequest.newBuilder()
@@ -250,6 +280,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> startCharging(DockOperationRequest request) {
+		validateSn(request.getSn());
 		log.info("StartCharging: sn={}", request.getSn());
 
 		var protoRequest = RemoteControlStartChargingRequest.newBuilder()
@@ -262,6 +293,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> stopCharging(DockOperationRequest request) {
+		validateSn(request.getSn());
 		log.info("StopCharging: sn={}", request.getSn());
 
 		var protoRequest = RemoteControlStopChargingRequest.newBuilder()
@@ -274,6 +306,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> rebootAsset(DockOperationRequest request) {
+		validateSn(request.getSn());
 		log.info("RebootAsset: sn={}", request.getSn());
 
 		var protoRequest = RemoteControlRebootAssetRequest.newBuilder()
@@ -286,6 +319,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> bootSubAsset(DockOperationRequest request) {
+		validateSn(request.getSn());
 		log.info("BootSubAsset: sn={}, boot={}", request.getSn(), request.getValue());
 
 		var protoRequest = RemoteControlBootSubAssetRequest.newBuilder()
@@ -299,6 +333,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> debugMode(DockOperationRequest request) {
+		validateSn(request.getSn());
 		log.info("DebugMode: sn={}, enabled={}", request.getSn(), request.getValue());
 
 		var protoRequest = RemoteControlDebugModeRequest.newBuilder()
@@ -312,6 +347,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 	@Override
 	public CompletableFuture<RemoteControlResponse> changeAcMode(DockOperationRequest request) {
+		validateSn(request.getSn());
 		log.info("ChangeAcMode: sn={}", request.getSn());
 
 		var protoRequest = RemoteControlChangeAcModeRequest.newBuilder()
@@ -320,6 +356,30 @@ public class RemoteControlImpl implements RemoteControl {
 
 		return executeAsync(observer -> asyncStub.changeAcMode(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
+	}
+
+	private static void validateSn(String sn) {
+		if (sn == null || sn.isBlank()) {
+			throw new IllegalArgumentException("SN must not be null or blank");
+		}
+	}
+
+	private static void validateCoordinates(float latitude, float longitude, float altitude) {
+		if (Float.isNaN(latitude) || Float.isInfinite(latitude)) {
+			throw new IllegalArgumentException("Latitude must be a finite number, got: " + latitude);
+		}
+		if (Float.isNaN(longitude) || Float.isInfinite(longitude)) {
+			throw new IllegalArgumentException("Longitude must be a finite number, got: " + longitude);
+		}
+		if (Float.isNaN(altitude) || Float.isInfinite(altitude)) {
+			throw new IllegalArgumentException("Altitude must be a finite number, got: " + altitude);
+		}
+		if (latitude < -90f || latitude > 90f) {
+			throw new IllegalArgumentException("Latitude must be between -90 and 90, got: " + latitude);
+		}
+		if (longitude < -180f || longitude > 180f) {
+			throw new IllegalArgumentException("Longitude must be between -180 and 180, got: " + longitude);
+		}
 	}
 
 	private com.zqnt.utils.common.proto.RequestBase buildBase(String sn) {

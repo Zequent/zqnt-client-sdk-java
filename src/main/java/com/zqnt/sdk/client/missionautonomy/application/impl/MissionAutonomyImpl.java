@@ -77,6 +77,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
     @Override
     public CompletableFuture<MissionResponse> createMission(MissionDTO missionDTO) {
+        missionDTO.validate();
         log.info("Creating mission: name={}", missionDTO.getName());
 
         var missionBuilder = mapMissionDtoToProto(MissionProtoDTO.newBuilder(), missionDTO);
@@ -92,6 +93,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
     @Override
     public CompletableFuture<MissionResponse> updateMission(String missionId, MissionDTO missionDTO) {
+        missionDTO.validate();
         log.info("Updating mission: missionId={}", missionId);
 
         var missionBuilder = mapMissionDtoToProto(MissionProtoDTO.newBuilder()

@@ -37,7 +37,7 @@ public class ChannelFactory {
         // Configure keep-alive
         channelBuilder
                 .keepAliveTime(30, TimeUnit.SECONDS)
-                .keepAliveTimeout(10, TimeUnit.SECONDS)
+                .keepAliveTimeout(30, TimeUnit.SECONDS)
                 .keepAliveWithoutCalls(true)
                 .idleTimeout(5, TimeUnit.MINUTES)
                 .enableRetry()

@@ -115,6 +115,10 @@ public class GrpcResilience {
         throw new RuntimeException("All retry attempts failed", lastException);
     }
 
+    public void checkCircuitBreaker() {
+        checkCircuitBreakerBlocking();
+    }
+
     private void checkCircuitBreakerBlocking() {
         if (circuitOpen) {
             long now = System.currentTimeMillis();
@@ -154,9 +158,10 @@ public class GrpcResilience {
         if (e instanceof StatusRuntimeException) {
             Status.Code code = ((StatusRuntimeException) e).getStatus().getCode();
             return code == Status.Code.UNAVAILABLE ||
-                   code == Status.Code.DEADLINE_EXCEEDED ||
-                   code == Status.Code.RESOURCE_EXHAUSTED ||
-                   code == Status.Code.UNKNOWN;
+                    code == Status.Code.DEADLINE_EXCEEDED ||
+                    code == Status.Code.RESOURCE_EXHAUSTED ||
+                    code == Status.Code.UNKNOWN ||
+                    code == Status.Code.INTERNAL;
         }
         return true; // Retry other exceptions
     }
