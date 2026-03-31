@@ -131,7 +131,8 @@ public class LiveDataImpl implements LiveData {
 		}
 
 		var protoRequest = liveDataMapper.toProtoRequest(request);
-		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+		// Inactivity timeout for streaming: 5 minutes by default (unrelated to unary requestTimeoutSeconds)
+		int inactivityTimeoutSeconds = 5 * 60;
 		int maxAttempts = config != null ? config.getMaxRetryAttempts() : 3;
 		long baseDelayMillis = config != null ? config.getRetryDelayMillis() : 1000L;
 		long maxDelayMillis = 30_000L;
@@ -143,14 +144,33 @@ public class LiveDataImpl implements LiveData {
 		Runnable scheduleTimeout = () -> {
 			ScheduledFuture<?> prev = timeoutRef.getAndSet(
 				timeoutScheduler.schedule(() -> {
-					if (!streamEnded.get() && !handle.isStopped()) {
-						String msg = "Stream timed out after " + timeout + " seconds of inactivity";
-						log.warn(msg);
+					if (streamEnded.get() || handle.isStopped()) {
+						return;
+					}
+					streamEnded.set(true);
+					log.warn("Stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
+
+					// Reconnect: if data was received before, treat as blip and reset counter
+					int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
+
+					if (nextAttempt > maxAttempts) {
+						String msg = "Stream inactive for " + inactivityTimeoutSeconds + "s and max reconnect attempts (" + maxAttempts + ") reached";
+						log.error(msg);
 						if (onError != null) {
 							onError.accept(new TimeoutException(msg));
 						}
+						return;
 					}
-				}, timeout, TimeUnit.SECONDS)
+
+					long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+					log.warn("Reconnecting after inactivity timeout (attempt {}/{}), delay {}ms",
+							nextAttempt, maxAttempts, delay);
+					timeoutScheduler.schedule(() -> {
+						if (!handle.isStopped()) {
+							startStream(request, onData, onError, handle, nextAttempt);
+						}
+					}, delay, MILLISECONDS);
+				}, inactivityTimeoutSeconds, TimeUnit.SECONDS)
 			);
 			if (prev != null) prev.cancel(false);
 		};
@@ -160,6 +180,10 @@ public class LiveDataImpl implements LiveData {
 		StreamObserver<LiveDataTelemetryResponse> observer = new StreamObserver<>() {
 			@Override
 			public void onNext(LiveDataTelemetryResponse protoResponse) {
+				// Ignore data from a zombie stream that was replaced after a timeout-triggered reconnect
+				if (streamEnded.get()) {
+					return;
+				}
 				dataReceived.set(true);
 				scheduleTimeout.run();
 
