@@ -70,6 +70,13 @@ public interface ZequentClientProperties {
 
         @WithDefault("ROUND_ROBIN")
         String loadBalancerType();
+
+        /**
+         * Maximum inbound gRPC message size in bytes. Defaults to -1 (gRPC default: 4 MB).
+         * Set to a higher value (e.g. 20971520 for 20 MB) if messages exceed 4 MB.
+         */
+        @WithDefault("-1")
+        int maxInboundMessageSize();
     }
 
     /**

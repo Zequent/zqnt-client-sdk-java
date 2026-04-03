@@ -115,7 +115,11 @@ public class GrpcResilience {
         throw new RuntimeException("All retry attempts failed", lastException);
     }
 
-    private void checkCircuitBreakerBlocking() {
+    public void checkCircuitBreaker() {
+        checkCircuitBreakerBlocking();
+    }
+
+    private synchronized void checkCircuitBreakerBlocking() {
         if (circuitOpen) {
             long now = System.currentTimeMillis();
             if (now - circuitOpenedAt >= circuitBreakerWaitDurationMillis) {
@@ -128,7 +132,7 @@ public class GrpcResilience {
         }
     }
 
-    public void recordSuccess() {
+    public synchronized void recordSuccess() {
         if (failureCount.get() > 0) {
             log.debug("Request succeeded - resetting failure count");
             failureCount.set(0);
@@ -143,10 +147,14 @@ public class GrpcResilience {
         int failures = failureCount.incrementAndGet();
         log.warn("Request failed - failure count: {}/{}", failures, circuitBreakerFailureThreshold);
 
-        if (failures >= circuitBreakerFailureThreshold && !circuitOpen) {
-            circuitOpen = true;
-            circuitOpenedAt = System.currentTimeMillis();
-            log.error("Circuit breaker OPENED after {} failures", failures);
+        if (failures >= circuitBreakerFailureThreshold) {
+            synchronized (this) {
+                if (!circuitOpen) {
+                    circuitOpen = true;
+                    circuitOpenedAt = System.currentTimeMillis();
+                    log.error("Circuit breaker OPENED after {} failures", failures);
+                }
+            }
         }
     }
 
@@ -154,9 +162,10 @@ public class GrpcResilience {
         if (e instanceof StatusRuntimeException) {
             Status.Code code = ((StatusRuntimeException) e).getStatus().getCode();
             return code == Status.Code.UNAVAILABLE ||
-                   code == Status.Code.DEADLINE_EXCEEDED ||
-                   code == Status.Code.RESOURCE_EXHAUSTED ||
-                   code == Status.Code.UNKNOWN;
+                    code == Status.Code.DEADLINE_EXCEEDED ||
+                    code == Status.Code.RESOURCE_EXHAUSTED ||
+                    code == Status.Code.UNKNOWN ||
+                    code == Status.Code.INTERNAL;
         }
         return true; // Retry other exceptions
     }

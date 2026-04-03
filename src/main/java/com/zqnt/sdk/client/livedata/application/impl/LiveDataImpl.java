@@ -13,7 +13,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
  * Internal Live Data streaming client using standard gRPC stubs.
@@ -53,12 +57,21 @@ public class LiveDataImpl implements LiveData {
 		this.futureStub = LiveDataServiceGrpc.newFutureStub(channel);
 		this.liveDataMapper = liveDataMapper;
 
-		// Dedicated thread pool for stream processing
-		this.streamExecutor = Executors.newCachedThreadPool(r -> {
+		// Dedicated thread pool for stream processing — fixed size + bounded queue with CallerRunsPolicy
+		// to avoid unbounded thread growth and apply backpressure when the consumer is slow.
+		int coreThreads = Math.max(2, Runtime.getRuntime().availableProcessors());
+		ThreadFactory streamThreadFactory = r -> {
 			Thread t = new Thread(r, "livedata-stream-handler");
 			t.setDaemon(true);
 			return t;
-		});
+		};
+		this.streamExecutor = new ThreadPoolExecutor(
+				coreThreads, coreThreads,
+				60L, TimeUnit.SECONDS,
+				new LinkedBlockingQueue<>(1000),
+				streamThreadFactory,
+				new ThreadPoolExecutor.CallerRunsPolicy()
+		);
 
 		// Scheduler for timeout handling
 		this.timeoutScheduler = Executors.newScheduledThreadPool(1, r -> {
@@ -81,44 +94,120 @@ public class LiveDataImpl implements LiveData {
 	}
 
 	/**
-	 * Stream telemetry data with automatic reconnection on failure.
-	 * Uses standard gRPC StreamObserver for optimal performance.
+	 * Starts streaming telemetry data with automatic reconnection on failure.
+	 * Reconnects up to {@code maxRetryAttempts} times (from config) with exponential backoff.
+	 * If data was received before a disconnect, the attempt counter resets (treats it as a blip).
 	 *
-	 * @param request The streaming request (POJO)
-	 * @param onData Callback for each data item (POJO)
-	 * @param onError Optional callback for errors
+	 * @return a {@link StreamHandle} — call {@code stop()} to cancel the stream and reconnection
 	 */
-	public void streamTelemetryData(StreamTelemetryRequest request,
-                                    Consumer<StreamTelemetryResponse> onData,
-                                    Consumer<Throwable> onError) {
+	@Override
+	public StreamHandle streamTelemetryData(StreamTelemetryRequest request,
+											Consumer<StreamTelemetryResponse> onData,
+											Consumer<Throwable> onError) {
+		StreamHandle handle = new StreamHandle();
+		startStream(request, onData, onError, handle, 0);
+		return handle;
+	}
+
+	/**
+	 * Convenience overload — errors are logged automatically.
+	 *
+	 * @return a {@link StreamHandle} — call {@code stop()} to cancel the stream and reconnection
+	 */
+	@Override
+	public StreamHandle streamTelemetryData(StreamTelemetryRequest request,
+											Consumer<StreamTelemetryResponse> onData) {
+		return streamTelemetryData(request, onData,
+				error -> log.error("Unhandled stream error (use the overload with onError to handle this): {}", error.getMessage(), error));
+	}
+
+	private void startStream(StreamTelemetryRequest request,
+							 Consumer<StreamTelemetryResponse> onData,
+							 Consumer<Throwable> onError,
+							 StreamHandle handle,
+							 int reconnectAttempt) {
+		if (handle.isStopped()) {
+			return;
+		}
+
+		try {
+			resilience.checkCircuitBreaker();
+		} catch (RuntimeException e) {
+			log.warn("Rejecting stream request - circuit breaker is OPEN: {}", e.getMessage());
+			if (onError != null) {
+				onError.accept(e);
+			}
+			return;
+		}
+
 		var protoRequest = liveDataMapper.toProtoRequest(request);
-		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+		// Inactivity timeout for streaming: 5 minutes by default (unrelated to unary requestTimeoutSeconds)
+		int inactivityTimeoutSeconds = 5 * 60;
+		int maxAttempts = config != null ? config.getMaxRetryAttempts() : 3;
+		long baseDelayMillis = config != null ? config.getRetryDelayMillis() : 1000L;
+		long maxDelayMillis = 30_000L;
 
-		AtomicBoolean completed = new AtomicBoolean(false);
+		AtomicBoolean streamEnded = new AtomicBoolean(false);
+		AtomicBoolean dataReceived = new AtomicBoolean(false);
+		AtomicLong lastReceivedAt = new AtomicLong(System.currentTimeMillis());
+		long inactivityTimeoutMillis = (long) inactivityTimeoutSeconds * 1000;
+		long checkIntervalSeconds = Math.max(10L, inactivityTimeoutSeconds / 6L);
+		AtomicReference<ScheduledFuture<?>> periodicCheckRef = new AtomicReference<>();
 
-		// Timeout task
-		ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-			if (!completed.get()) {
-				String msg = "Stream timed out after " + timeout + " seconds";
-				log.warn(msg);
+		// Single periodic task instead of reschedule-on-every-message:
+		// avoids ScheduledExecutorService lock contention at high telemetry frequency.
+		ScheduledFuture<?> periodicCheck = timeoutScheduler.scheduleAtFixedRate(() -> {
+			if (streamEnded.get() || handle.isStopped()) {
+				return;
+			}
+			if (System.currentTimeMillis() - lastReceivedAt.get() < inactivityTimeoutMillis) {
+				return;
+			}
+			streamEnded.set(true);
+			ScheduledFuture<?> self = periodicCheckRef.get();
+			if (self != null) self.cancel(false);
+
+			log.warn("Stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
+
+			// Reconnect: if data was received before, treat as blip and reset counter
+			int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
+
+			if (nextAttempt > maxAttempts) {
+				String msg = "Stream inactive for " + inactivityTimeoutSeconds + "s and max reconnect attempts (" + maxAttempts + ") reached";
+				log.error(msg);
 				if (onError != null) {
 					onError.accept(new TimeoutException(msg));
 				}
+				return;
 			}
-		}, timeout, TimeUnit.SECONDS);
 
-		StreamObserver<LiveDataTelemetryResponse> observer =
-			new StreamObserver<>() {
-				@Override
-				public void onNext(LiveDataTelemetryResponse protoResponse) {
+			long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+			log.warn("Reconnecting after inactivity timeout (attempt {}/{}), delay {}ms",
+					nextAttempt, maxAttempts, delay);
+			timeoutScheduler.schedule(() -> {
+				if (!handle.isStopped()) {
+					startStream(request, onData, onError, handle, nextAttempt);
+				}
+			}, delay, MILLISECONDS);
+		}, checkIntervalSeconds, checkIntervalSeconds, TimeUnit.SECONDS);
+
+		periodicCheckRef.set(periodicCheck);
+
+		StreamObserver<LiveDataTelemetryResponse> observer = new StreamObserver<>() {
+			@Override
+			public void onNext(LiveDataTelemetryResponse protoResponse) {
+				// Ignore data from a zombie stream that was replaced after a timeout-triggered reconnect
+				if (streamEnded.get()) {
+					return;
+				}
+				dataReceived.set(true);
+				lastReceivedAt.set(System.currentTimeMillis());
+
+				// Proto-to-POJO mapping is moved into the executor to avoid blocking the gRPC Netty I/O thread.
+				streamExecutor.execute(() -> {
 					try {
-						// Reset timeout on each received item
-						timeoutTask.cancel(false);
-
-						// Map to POJO and invoke callback
 						var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
 						onData.accept(pojoResponse);
-
 						resilience.recordSuccess();
 					} catch (Exception e) {
 						log.error("Error processing stream item: {}", e.getMessage(), e);
@@ -126,48 +215,60 @@ public class LiveDataImpl implements LiveData {
 							onError.accept(e);
 						}
 					}
+				});
+			}
+
+			@Override
+			public void onError(Throwable error) {
+				streamEnded.set(true);
+				ScheduledFuture<?> check = periodicCheckRef.get();
+				if (check != null) check.cancel(false);
+
+				resilience.recordFailure(error);
+
+				if (handle.isStopped()) {
+					return;
 				}
 
-				@Override
-				public void onError(Throwable error) {
-					completed.set(true);
-					timeoutTask.cancel(false);
+				// If data was received, treat disconnect as a blip and reset attempt counter
+				int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
 
-					log.error("Stream error: {}", error.getMessage(), error);
-					resilience.recordFailure(error);
-
+				if (nextAttempt > maxAttempts) {
+					log.error("Stream failed after {} reconnect attempts, giving up: {}", reconnectAttempt, error.getMessage(), error);
 					if (onError != null) {
 						onError.accept(error);
 					}
+					return;
 				}
 
-				@Override
-				public void onCompleted() {
-					completed.set(true);
-					timeoutTask.cancel(false);
-					log.debug("Stream completed successfully");
-				}
-			};
+				long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+				log.warn("Stream error (attempt {}/{}), reconnecting in {}ms: {}",
+						nextAttempt, maxAttempts, delay, error.getMessage());
 
-		// Execute stream call asynchronously
-		streamExecutor.execute(() -> {
-			try {
-				asyncStub.streamTelemetry(protoRequest, observer);
-			} catch (Exception e) {
-				log.error("Failed to start stream: {}", e.getMessage(), e);
-				if (onError != null) {
-					onError.accept(e);
-				}
+				timeoutScheduler.schedule(() -> {
+					if (!handle.isStopped()) {
+						startStream(request, onData, onError, handle, nextAttempt);
+					}
+				}, delay, MILLISECONDS);
 			}
-		});
-	}
 
-	/**
-	 * Stream telemetry data (convenience method without error callback).
-	 */
-	public void streamTelemetryData(StreamTelemetryRequest request,
-									Consumer<StreamTelemetryResponse> onData) {
-		streamTelemetryData(request, onData, null);
+			@Override
+			public void onCompleted() {
+				streamEnded.set(true);
+				ScheduledFuture<?> check = periodicCheckRef.get();
+				if (check != null) check.cancel(false);
+				log.debug("Stream completed");
+			}
+		};
+
+		try {
+			asyncStub.streamTelemetry(protoRequest, observer);
+		} catch (Exception e) {
+			log.error("Failed to start stream: {}", e.getMessage(), e);
+			if (onError != null) {
+				onError.accept(e);
+			}
+		}
 	}
 
 	/**

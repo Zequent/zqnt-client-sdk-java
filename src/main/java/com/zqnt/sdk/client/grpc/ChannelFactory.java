@@ -37,7 +37,7 @@ public class ChannelFactory {
         // Configure keep-alive
         channelBuilder
                 .keepAliveTime(30, TimeUnit.SECONDS)
-                .keepAliveTimeout(10, TimeUnit.SECONDS)
+                .keepAliveTimeout(30, TimeUnit.SECONDS)
                 .keepAliveWithoutCalls(true)
                 .idleTimeout(5, TimeUnit.MINUTES)
                 .enableRetry()
@@ -46,6 +46,13 @@ public class ChannelFactory {
         // Configure TLS
         if (config.isUsePlaintext()) {
             channelBuilder.usePlaintext();
+        }
+
+        // Configure max inbound message size
+        if (config.getMaxInboundMessageSize() > 0) {
+            channelBuilder.maxInboundMessageSize(config.getMaxInboundMessageSize());
+            log.info("Max inbound message size set to {} bytes for service: {}",
+                    config.getMaxInboundMessageSize(), config.getServiceName());
         }
 
         ManagedChannel channel = channelBuilder.build();

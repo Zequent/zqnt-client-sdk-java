@@ -84,6 +84,7 @@ public class ZequentClientConfigFactory {
                 .useStork(props.useStork())
                 .storkServiceName(storkServiceName)
                 .loadBalancerType(loadBalancerType)
+                .maxInboundMessageSize(props.maxInboundMessageSize())
                 .build();
 
         log.info("Service '{}' configured: host={}, port={}, useStork={}, loadBalancer={}",
