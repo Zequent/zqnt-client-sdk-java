@@ -14,13 +14,10 @@ import com.zqnt.utils.mission.proto.*;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
-import com.zqnt.utils.missionautonomy.domains.WaypointDTO;
 import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
 
@@ -80,6 +77,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
     @Override
     public CompletableFuture<MissionResponse> createMission(MissionDTO missionDTO) {
+        missionDTO.validate();
         log.info("Creating mission: name={}", missionDTO.getName());
 
         var missionBuilder = mapMissionDtoToProto(MissionProtoDTO.newBuilder(), missionDTO);
@@ -95,6 +93,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
     @Override
     public CompletableFuture<MissionResponse> updateMission(String missionId, MissionDTO missionDTO) {
+        missionDTO.validate();
         log.info("Updating mission: missionId={}", missionId);
 
         var missionBuilder = mapMissionDtoToProto(MissionProtoDTO.newBuilder()
@@ -171,7 +170,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     @Override
     public CompletableFuture<TaskResponse> createTask(TaskDTO taskDTO) {
         log.info("Creating task: name={}", taskDTO.getName());
-
+        taskDTO.validate();
         var taskProtoBuilder = mapTaskDtoToProto(TaskProtoDTO.newBuilder(), taskDTO);
 
         var protoRequest = CreateTaskRequest.newBuilder()
@@ -186,6 +185,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     @Override
     public CompletableFuture<TaskResponse> updateTask(String taskId, TaskDTO taskDTO) {
         log.info("Updating task: taskId={}", taskId);
+        taskDTO.validate();
 
         var taskProtoBuilder = mapTaskDtoToProto(TaskProtoDTO.newBuilder()
                 .setId(taskId), taskDTO);
@@ -201,17 +201,23 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
 
-    //TODO fix the sdks
     private static TaskProtoDTO.@NonNull Builder mapTaskDtoToProto(TaskProtoDTO.Builder taskId, TaskDTO taskDTO) {
         var taskProtoBuilder = taskId
                 .setName(taskDTO.getName() != null ? taskDTO.getName() : "")
                 .setSnNumber(taskDTO.getSnNumber() != null ? taskDTO.getSnNumber() : "")
                 .setAssetId(taskDTO.getAssetId() != null ? taskDTO.getAssetId() : "")
                 .setDescription(taskDTO.getDescription() != null ? taskDTO.getDescription() : "")
-                .setCurrentStep(taskDTO.getCurrentStep() != null ? taskDTO.getCurrentStep() : "");
+                .setCurrentStep(taskDTO.getCurrentStep() != null ? taskDTO.getCurrentStep() : "")
+                .setModifiedFrom(taskDTO.getModifiedFrom() != null ? taskDTO.getModifiedFrom() : "");
 
         if (taskDTO.getMissionId() != null) {
             taskProtoBuilder.setMissionId(taskDTO.getMissionId().toString());
+        }
+        if (taskDTO.getTaskType() != null) {
+            taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()));
+        }
+        if (taskDTO.getConfig() != null) {
+            taskProtoBuilder.setConfig(JsonUtils.toJson(taskDTO.getConfig()));
         }
         if (taskDTO.getStatus() != null) {
             taskProtoBuilder.setStatus(taskDTO.getStatus());
@@ -222,7 +228,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (taskDTO.getModifiedAt() != null) {
             taskProtoBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(taskDTO.getModifiedAt()));
         }
-     
+
         if (taskDTO.getCurrentProgress() != null) {
             taskProtoBuilder.setCurrentProgress(taskDTO.getCurrentProgress());
         }
@@ -232,22 +238,6 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         return taskProtoBuilder;
     }
 
-    private static List<WaypointProtoDTO> mapWaypointsDtoToProto(List<WaypointDTO> waypointDTOS) {
-        List<WaypointProtoDTO> waypointProtoDTOS = new ArrayList<>();
-        waypointDTOS.forEach(waypointDTO -> {
-            waypointProtoDTOS.add(WaypointProtoDTO.newBuilder()
-                    .setLatitude(waypointDTO.getLatitude())
-                    .setLongitude(waypointDTO.getLongitude())
-                    .setAltitude(waypointDTO.getAltitude())
-                    .setSpeed(waypointDTO.getSpeed())
-                    .setWpOrder(waypointDTO.getWpOrder())
-                    .setVehicleAction(waypointDTO.getVehicleAction())
-                    .setGimbalPitch(waypointDTO.getGimbalPitch())
-                    .setFlyTrough(waypointDTO.getFlyThrough())
-                    .build());
-        });
-        return waypointProtoDTOS;
-    }
 
     @Override
     public CompletableFuture<TaskResponse> getTask(String taskId) {
@@ -317,10 +307,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     @Override
     public CompletableFuture<SchedulerResponse> createScheduler(SchedulerDTO schedulerDTO) {
         log.info("Creating scheduler: name={}", schedulerDTO.getName());
-
+        schedulerDTO.validate();
         var schedulerBuilder = mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder(), schedulerDTO);
-
-
         var protoRequest = CreateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
                 .setSchedulerDTO(schedulerBuilder.build())
@@ -348,13 +336,14 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (schedulerDTO.getMissionId() != null) {
             schedulerBuilder.setMissionId(schedulerDTO.getMissionId().toString());
         }
+
         return schedulerBuilder;
     }
 
     @Override
     public CompletableFuture<SchedulerResponse> updateScheduler(String schedulerId, SchedulerDTO schedulerDTO) {
         log.info("Updating scheduler: schedulerId={}", schedulerId);
-
+        schedulerDTO.validate();
         var schedulerBuilder = mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder()
                 .setId(schedulerId), schedulerDTO);
 
@@ -483,18 +472,6 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
 
         if (proto.hasMissionDTO()) {
-         /*   var missionDTO = MissionDTO.builder()
-                    .id(proto.getMissionDTO().hasId() ? UUID.fromString(proto.getMissionDTO().getId()) : null)
-                    .name(proto.getMissionDTO().getName())
-                    .description(proto.getMissionDTO().getDescription())
-                    .endDate(ProtobufHelpers.toLocalDateTime(proto.getMissionDTO().getEndDate()))
-                    .startDate(ProtobufHelpers.toLocalDateTime(proto.getMissionDTO().getStartDate()))
-                    .geoJson(proto.getMissionDTO().getGeoJson())
-                    .status(proto.getMissionDTO().getStatus());
-
-            if (proto.getMissionDTO().getAssignedAssetsCount() > 0) {
-                missionDTO.assignedAssets(new HashSet<>(proto.getMissionDTO().getAssignedAssetsList()));
-            }*/
             var json = ProtoJsonUtils.toJson(proto.getMissionDTO());
             var missionDTO = JsonUtils.fromJson(json, MissionDTO.class);
 
