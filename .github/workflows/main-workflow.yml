@@ -82,7 +82,7 @@ jobs:
           echo "\`\`\`xml" >> $GITHUB_STEP_SUMMARY
           echo "<dependency>" >> $GITHUB_STEP_SUMMARY
           echo "    <groupId>com.zqnt.sdk</groupId>" >> $GITHUB_STEP_SUMMARY
-          echo "    <artifactId>client-sdk</artifactId>" >> $GITHUB_STEP_SUMMARY
+          echo "    <artifactId>client-java-sdk</artifactId>" >> $GITHUB_STEP_SUMMARY
           echo "    <version>${{ steps.version.outputs.version }}</version>" >> $GITHUB_STEP_SUMMARY
           echo "</dependency>" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
