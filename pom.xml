@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.zqnt.sdk</groupId>
     <artifactId>client-java-sdk</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <name>Zequent Java Client SDK</name>
     <description>A framework-agnostic Java client SDK for Zequent's gRPC services, designed for easy integration with any Java application.</description>
     <url>https://github.com/zequent/zqnt-client-sdk-java</url>
@@ -45,7 +45,7 @@
         <repository>
             <id>zqnt-utils-repo</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zqnt-utils</url>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-utils-java</url>
             <releases>
                 <enabled>true</enabled>
             </releases>
@@ -131,8 +131,8 @@
         <!-- Zequent Framework Utils (internal dependency - optional for public) -->
         <dependency>
             <groupId>com.zqnt</groupId>
-            <artifactId>zqnt-utils</artifactId>
-            <version>1.0.0-PR3-a9bd02f-SNAPSHOT</version>
+            <artifactId>zqnt-utils-java</artifactId>
+            <version>1.0.1</version>
         </dependency>
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
