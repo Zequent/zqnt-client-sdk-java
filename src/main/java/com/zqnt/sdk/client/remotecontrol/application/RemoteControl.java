@@ -36,4 +36,5 @@ public interface RemoteControl {
     CompletableFuture<RemoteControlResponse> bootSubAsset(DockOperationRequest request);
     CompletableFuture<RemoteControlResponse> debugMode(DockOperationRequest request);
     CompletableFuture<RemoteControlResponse> changeAcMode(DockOperationRequest request);
+    CompletableFuture<RemoteControlResponse> takePhoto(DockOperationRequest request);
 }

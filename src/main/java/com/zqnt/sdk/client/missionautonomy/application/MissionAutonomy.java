@@ -7,6 +7,7 @@ import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface MissionAutonomy {
@@ -31,5 +32,8 @@ public interface MissionAutonomy {
     CompletableFuture<SchedulerResponse> updateScheduler(String schedulerId, SchedulerDTO schedulerDTO);
     CompletableFuture<SchedulerResponse> getScheduler(String schedulerId);
     CompletableFuture<SchedulerResponse> deleteScheduler(String schedulerId);
+    CompletableFuture<SchedulerResponse> createSchedulers(List<SchedulerDTO> schedulerDTOS);
+    CompletableFuture<SchedulerResponse> deleteSchedulers(List<String> schedulerIds);
+    CompletableFuture<SchedulerResponse> deleteAllSchedulersByTaskId(String taskId);
+    //TODO add batchdelete endpoint here -> up to the core layer handling in db layer mutli delete for schedulers
 }
-

@@ -18,8 +18,10 @@ import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 /**
  * Mission Autonomy client implementation using standard gRPC stubs.
@@ -383,6 +385,44 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .thenApply(this::toSchedulerResponse);
     }
 
+    //TODO finish up implemetation on client sdk side for new endpoints
+    @Override
+    public CompletableFuture<SchedulerResponse> createSchedulers(List<SchedulerDTO> schedulerDTOS) {
+        log.info("Creating schedulers: count={}", schedulerDTOS.size());
+        var protoRequest = CreateSchedulersRequest.newBuilder()
+                .setBase(buildBase())
+                .addAllSchedulerDTOs(schedulerDTOS.stream().map(this::toSchedulerProtoDTO)
+                .collect(Collectors.toList()))
+                .build();
+
+        return executeAsync(() -> futureStub.createSchedulers(protoRequest))
+                .thenApply(this::toSchedulerResponse);
+    }
+
+    @Override
+    public CompletableFuture<SchedulerResponse> deleteSchedulers(List<String> schedulerIds) {
+        log.info("Deleting schedulers of count={}", schedulerIds.size());
+        var protoRequest = DeleteSchedulersRequest.newBuilder()
+                .setBase(buildBase())
+                .addAllSchedulerIds(schedulerIds)
+                .build();
+
+        return executeAsync(() -> futureStub.deleteSchedulers(protoRequest))
+                .thenApply(this::toSchedulerResponse);
+    }
+
+    @Override
+    public CompletableFuture<SchedulerResponse> deleteAllSchedulersByTaskId(String taskId) {
+        log.info("Deleting all Schedulers for Task={}", taskId);
+        var protoRequest = DeleteSchedulersByTaskRequest.newBuilder()
+                .setBase(buildBase())
+                .setTaskId(taskId)
+                .build();
+
+        return executeAsync(() -> futureStub.deleteSchedulersByTask(protoRequest))
+                .thenApply(this::toSchedulerResponse);
+    }
+
     private RequestBase buildBase() {
         return RequestBase.newBuilder()
                 .setTid(UUID.randomUUID().toString())
@@ -447,6 +487,11 @@ public class MissionAutonomyImpl implements MissionAutonomy {
             Thread.currentThread().interrupt();
         }
     }
+
+    private SchedulerProtoDTO toSchedulerProtoDTO(SchedulerDTO schedulerDTO) {
+        return mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder(), schedulerDTO).build();
+    }
+
 
     private MissionResponse toMissionResponse(com.zqnt.utils.mission.proto.MissionResponse proto) {
         var builder = MissionResponse.builder()

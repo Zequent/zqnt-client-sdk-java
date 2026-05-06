@@ -358,6 +358,16 @@ public class RemoteControlImpl implements RemoteControl {
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
+	@Override
+	public CompletableFuture<RemoteControlResponse> takePhoto(DockOperationRequest request) {
+		validateSn(request.getSn());
+		var protoRequest = RemoteControlTakePhotoRequest.newBuilder()
+				.setBase(buildBase(request.getSn()))
+				.build();
+		return executeAsync(observer -> asyncStub.takePhoto(protoRequest, observer))
+				.thenApply(proto -> toResponse(proto, request.getSn()));
+	}
+
 	private static void validateSn(String sn) {
 		if (sn == null || sn.isBlank()) {
 			throw new IllegalArgumentException("SN must not be null or blank");

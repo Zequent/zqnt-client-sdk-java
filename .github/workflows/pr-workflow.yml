@@ -90,7 +90,7 @@ jobs:
             \`\`\`xml
             <dependency>
                 <groupId>com.zqnt.sdk</groupId>
-                <artifactId>client-sdk</artifactId>
+                <artifactId>client-java-sdk</artifactId>
                 <version>${version}</version>
             </dependency>
             \`\`\`
