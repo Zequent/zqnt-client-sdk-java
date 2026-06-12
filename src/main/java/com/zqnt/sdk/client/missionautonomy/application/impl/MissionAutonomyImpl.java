@@ -86,7 +86,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
         var protoRequest = CreateMissionRequest.newBuilder()
                 .setBase(buildBase())
-                .setMissionDTO(missionBuilder.build())
+                .setMissionDto(missionBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createMission(protoRequest))
@@ -104,7 +104,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateMissionRequest.newBuilder()
                 .setBase(buildBase())
                 .setMissionId(missionId)
-                .setMissionDTO(missionBuilder.build())
+                .setMissionDto(missionBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateMission(protoRequest))
@@ -177,7 +177,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
         var protoRequest = CreateTaskRequest.newBuilder()
                 .setBase(buildBase())
-                .setTaskDTO(taskProtoBuilder.build())
+                .setTaskDto(taskProtoBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createTask(protoRequest))
@@ -195,7 +195,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateTaskRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
-                .setTaskDTO(taskProtoBuilder.build())
+                .setTaskDto(taskProtoBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateTask(protoRequest))
@@ -216,7 +216,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
             taskProtoBuilder.setMissionId(taskDTO.getMissionId().toString());
         }
         if (taskDTO.getTaskType() != null) {
-            taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()));
+            taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()).name());
         }
         if (taskDTO.getConfig() != null) {
             taskProtoBuilder.setConfig(JsonUtils.toJson(taskDTO.getConfig()));
@@ -313,7 +313,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var schedulerBuilder = mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder(), schedulerDTO);
         var protoRequest = CreateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
-                .setSchedulerDTO(schedulerBuilder.build())
+                .setSchedulerDto(schedulerBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createScheduler(protoRequest))
@@ -352,7 +352,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
                 .setSchedulerId(schedulerId)
-                .setSchedulerDTO(schedulerBuilder.build())
+                .setSchedulerDto(schedulerBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateScheduler(protoRequest))
@@ -391,7 +391,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         log.info("Creating schedulers: count={}", schedulerDTOS.size());
         var protoRequest = CreateSchedulersRequest.newBuilder()
                 .setBase(buildBase())
-                .addAllSchedulerDTOs(schedulerDTOS.stream().map(this::toSchedulerProtoDTO)
+                .addAllSchedulerDtos(schedulerDTOS.stream().map(this::toSchedulerProtoDTO)
                 .collect(Collectors.toList()))
                 .build();
 
@@ -516,8 +516,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasMissionDTO()) {
-            var json = ProtoJsonUtils.toJson(proto.getMissionDTO());
+        if (proto.hasMissionDto()) {
+            var json = ProtoJsonUtils.toJson(proto.getMissionDto());
             var missionDTO = JsonUtils.fromJson(json, MissionDTO.class);
 
             builder.missionData(missionDTO);
@@ -549,8 +549,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasTaskDTO()) {
-            var json = ProtoJsonUtils.toJson(proto.getTaskDTO());
+        if (proto.hasTaskDto()) {
+            var json = ProtoJsonUtils.toJson(proto.getTaskDto());
             builder.taskData(JsonUtils.fromJson(json, TaskDTO.class));
         }
 
@@ -580,8 +580,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasSchedulerDTO()) {
-            var json = ProtoJsonUtils.toJson(proto.getSchedulerDTO());
+        if (proto.hasSchedulerDto()) {
+            var json = ProtoJsonUtils.toJson(proto.getSchedulerDto());
             builder.schedulerData(JsonUtils.fromJson(json, SchedulerDTO.class));
         }
 

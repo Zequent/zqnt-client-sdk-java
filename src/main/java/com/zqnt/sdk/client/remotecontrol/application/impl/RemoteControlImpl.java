@@ -324,7 +324,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 		var protoRequest = RemoteControlBootSubAssetRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setBoot(request.getValue() != null && request.getValue())
+				.setBootUp(request.getValue() != null && request.getValue())
 				.build();
 
 		return executeAsync(observer -> asyncStub.bootSubAsset(protoRequest, observer))

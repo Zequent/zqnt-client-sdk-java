@@ -38,7 +38,7 @@ public class LiveDataMapper {
                         .setSn(request.getSn())
                         .setTid(request.getTid())
                         .build())
-                .setCommand(LiveDataServiceCommand.START_TELEMETRY_STREAM);
+                .setCommand(LiveDataServiceCommand.LIVE_DATA_COMMAND_START_TELEMETRY_STREAM);
 
         if (request.getFrequencyMs() > 0) {
             builder.setFrequencyMs(request.getFrequencyMs());
@@ -71,10 +71,10 @@ public class LiveDataMapper {
 
         // Map oneof telemetry fields
         switch (protoResponse.getTelemetryCase()) {
-            case ASSETTELEMETRY:
+            case ASSET_TELEMETRY:
                 response.setAssetTelemetry(mapAssetTelemetry(protoResponse.getAssetTelemetry()));
                 break;
-            case SUBASSETTELEMETRY:
+            case SUB_ASSET_TELEMETRY:
                 response.setSubAssetTelemetry(mapSubAssetTelemetry(protoResponse.getSubAssetTelemetry()));
                 break;
             case ERROR:
