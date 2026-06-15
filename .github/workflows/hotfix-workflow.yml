@@ -1,0 +1,57 @@
+name: Hotfix Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Commit SHA to build the hotfix from'
+        required: true
+        type: string
+      base_version:
+        description: 'Base version to patch (e.g. 1.2.0 → produces 1.2.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-tag:
+    name: Validate & Create Tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify commit exists
+        run: |
+          if ! git cat-file -e "${{ inputs.commit_sha }}^{commit}"; then
+            echo "ERROR: Commit ${{ inputs.commit_sha }} not found"
+            exit 1
+          fi
+
+      - name: Validate base version format
+        run: |
+          if ! echo "${{ inputs.base_version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: base_version must be in format X.Y.Z"
+            exit 1
+          fi
+
+      - name: Compute patch version and create tag
+        run: |
+          BASE="${{ inputs.base_version }}"
+          MAJOR=$(echo "$BASE" | cut -d. -f1)
+          MINOR=$(echo "$BASE" | cut -d. -f2)
+          PATCH=$(echo "$BASE" | cut -d. -f3)
+          HOTFIX_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${HOTFIX_VERSION}" ${{ inputs.commit_sha }} \
+            -m "Hotfix v${HOTFIX_VERSION} — patched from v${{ inputs.base_version }} at commit ${{ inputs.commit_sha }}"
+          git push origin "v${HOTFIX_VERSION}"
+
+          echo "Tag v${HOTFIX_VERSION} created — release workflow will publish as stable package"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
