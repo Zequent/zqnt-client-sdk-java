@@ -33,12 +33,16 @@ public class LiveDataMapper {
             return null;
         }
 
+        LiveDataServiceCommand command = request.getCommand() != null
+                ? request.getCommand()
+                : LiveDataServiceCommand.LIVE_DATA_COMMAND_START_TELEMETRY_STREAM;
+
         var builder = LiveDataStreamTelemetryRequest.newBuilder()
                 .setBase(RequestBase.newBuilder()
                         .setSn(request.getSn())
                         .setTid(request.getTid())
                         .build())
-                .setCommand(LiveDataServiceCommand.LIVE_DATA_COMMAND_START_TELEMETRY_STREAM);
+                .setCommand(command);
 
         if (request.getFrequencyMs() > 0) {
             builder.setFrequencyMs(request.getFrequencyMs());

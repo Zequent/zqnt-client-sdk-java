@@ -1,5 +1,6 @@
 package com.zqnt.sdk.client.livedata.domains;
 
+import com.zqnt.utils.common.proto.LiveDataServiceCommand;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,5 +20,6 @@ public class StreamTelemetryRequest {
 	private int frequencyMs;
 	private int duration;
 	private LocalDateTime timestamp;
+	private LiveDataServiceCommand command;
 
 }
