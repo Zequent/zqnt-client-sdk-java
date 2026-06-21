@@ -26,6 +26,8 @@ public interface MissionAutonomy {
     CompletableFuture<TaskResponse> deleteTask(String taskId);
     CompletableFuture<TaskResponse> startTask(String taskId);
     CompletableFuture<TaskResponse> stopTask(String taskId);
+    CompletableFuture<TaskResponse> pauseTask(String taskId);
+    CompletableFuture<TaskResponse> resumeTask(String taskId);
 
     // Schedule
     CompletableFuture<SchedulerResponse> createScheduler(SchedulerDTO request);
@@ -35,5 +37,4 @@ public interface MissionAutonomy {
     CompletableFuture<SchedulerResponse> createSchedulers(List<SchedulerDTO> schedulerDTOS);
     CompletableFuture<SchedulerResponse> deleteSchedulers(List<String> schedulerIds);
     CompletableFuture<SchedulerResponse> deleteAllSchedulersByTaskId(String taskId);
-    //TODO add batchdelete endpoint here -> up to the core layer handling in db layer mutli delete for schedulers
 }

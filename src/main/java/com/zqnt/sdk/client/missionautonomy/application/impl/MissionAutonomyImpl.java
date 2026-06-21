@@ -307,6 +307,29 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
     @Override
+    public CompletableFuture<TaskResponse> pauseTask(String taskId) {
+        log.info("Pausing task: taskId={}", taskId);
+        var protoRequest = PauseTaskRequest.newBuilder()
+                .setBase(buildBase())
+                .setTaskId(taskId)
+                .build();
+        return executeAsync(() -> futureStub.pauseTask(protoRequest))
+                .thenApply(this::toTaskResponse);
+    }
+
+    @Override
+    public CompletableFuture<TaskResponse> resumeTask(String taskId) {
+        log.info("Resume task: taskId={}", taskId);
+        var protoRequest = ResumeTaskRequest.newBuilder()
+                .setBase(buildBase())
+                .setTaskId(taskId)
+                .build();
+
+        return executeAsync(() -> futureStub.resumeTask(protoRequest))
+                .thenApply(this::toTaskResponse);
+    }
+
+    @Override
     public CompletableFuture<SchedulerResponse> createScheduler(SchedulerDTO schedulerDTO) {
         log.info("Creating scheduler: name={}", schedulerDTO.getName());
         schedulerDTO.validate();
