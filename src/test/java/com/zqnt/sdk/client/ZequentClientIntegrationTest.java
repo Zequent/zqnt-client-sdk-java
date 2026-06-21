@@ -6,6 +6,7 @@ import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
 import com.zqnt.sdk.client.remotecontrol.domains.DockOperationRequest;
 import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
 
+import com.zqnt.utils.common.proto.LiveDataServiceCommand;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -151,7 +152,7 @@ class ZequentClientIntegrationTest {
 		// Create POJO request
 		StreamTelemetryRequest request = new StreamTelemetryRequest(TEST_ASSET_SN,
 				tid.toString(), 100, 100,
-				LocalDateTime.now());
+				LocalDateTime.now(), LiveDataServiceCommand.LIVE_DATA_COMMAND_START_TELEMETRY_STREAM);
 
 
 		try {

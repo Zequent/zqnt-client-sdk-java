@@ -141,6 +141,30 @@ public class LiveDataImpl implements LiveData {
 		}
 
 		var protoRequest = liveDataMapper.toProtoRequest(request);
+
+		// Stop command: forward to server (server calls stopTelemetryStream + onCompleted), no reconnection
+		if (request.getCommand() == com.zqnt.utils.common.proto.LiveDataServiceCommand.LIVE_DATA_COMMAND_STOP_TELEMETRY_STREAM) {
+			log.info("Sending stop telemetry stream for sn='{}'", request.getSn());
+			handle.stop();
+			StreamObserver<LiveDataTelemetryResponse> stopObserver = new StreamObserver<>() {
+				@Override public void onNext(LiveDataTelemetryResponse value) { /* no data expected on stop */ }
+				@Override public void onError(Throwable t) {
+					log.warn("Stop telemetry stream error for sn='{}': {}", request.getSn(), t.getMessage());
+					if (onError != null) onError.accept(t);
+				}
+				@Override public void onCompleted() {
+					log.debug("Stop telemetry stream acknowledged for sn='{}'", request.getSn());
+				}
+			};
+			try {
+				asyncStub.streamTelemetry(protoRequest, stopObserver);
+			} catch (Exception e) {
+				log.error("Failed to send stop stream request: {}", e.getMessage(), e);
+				if (onError != null) onError.accept(e);
+			}
+			return;
+		}
+
 		// Inactivity timeout for streaming: 5 minutes by default (unrelated to unary requestTimeoutSeconds)
 		int inactivityTimeoutSeconds = 5 * 60;
 		int maxAttempts = config != null ? config.getMaxRetryAttempts() : 3;
