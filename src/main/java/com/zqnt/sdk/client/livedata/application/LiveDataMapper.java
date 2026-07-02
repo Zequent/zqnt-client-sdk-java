@@ -151,6 +151,20 @@ public class LiveDataMapper {
                     .switchTime(proto.getAirConditioner().getSwitchTime())
                     .build());
         }
+        if (proto.hasWirelessLink()) {
+            data.setWirelessLink(AssetTelemetryData.WirelessLinkInformation.builder()
+                    .sdrFreqBand(proto.getWirelessLink().getSdrFreqBand())
+                    .sdrLinkState(proto.getWirelessLink().getSdrLinkState())
+                    .sdrQuality(proto.getWirelessLink().getSdrQuality())
+                    .fourthGenerationFreqBand(proto.getWirelessLink().getFourthGenerationFreqBand())
+                    .fourthGenerationGndQuality(proto.getWirelessLink().getFourthGenerationGndQuality())
+                    .fourthGenerationLinkState(proto.getWirelessLink().getFourthGenerationLinkState())
+                    .fourthGenerationUavQuality(proto.getWirelessLink().getFourthGenerationUavQuality())
+                    .linkWorkmode(proto.getWirelessLink().getLinkWorkmode())
+                    .dongleNumber(proto.getWirelessLink().getDongleNumber())
+                    .fourthGenerationQuality(proto.getWirelessLink().getFourthGenerationQuality())
+                    .build());
+        }
 
         if (proto.hasPositionState()) {
             data.setPositionState(com.zqnt.utils.edge.sdk.domains.AssetTelemetryData.PositionState.builder()
@@ -335,7 +349,7 @@ public class LiveDataMapper {
                 .tid(protoResponse.getTid())
                 .timestamp(timestampToLocalDateTime(protoResponse.getTimestamp()))
                 .hasErrors(protoResponse.getHasErrors())
-                .sn(protoResponse.getSn() )
+                .sn(protoResponse.getSn())
                 .assetId(protoResponse.hasAssetId() ? protoResponse.getAssetId() : null)
                 .responseMessage(protoResponse.hasResponseMessage() ? protoResponse.getResponseMessage() : null)
                 .build();
