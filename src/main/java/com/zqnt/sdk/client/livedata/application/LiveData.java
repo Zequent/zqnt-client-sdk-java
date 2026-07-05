@@ -1,13 +1,7 @@
 package com.zqnt.sdk.client.livedata.application;
 
-import com.zqnt.sdk.client.livedata.domains.ChangeLensRequest;
-import com.zqnt.sdk.client.livedata.domains.ChangeZoomRequest;
-import com.zqnt.sdk.client.livedata.domains.LiveDataResponse;
-import com.zqnt.sdk.client.livedata.domains.LiveDataStartLiveStreamRequest;
-import com.zqnt.sdk.client.livedata.domains.LiveDataStopLiveStreamRequest;
-import com.zqnt.sdk.client.livedata.domains.StreamHandle;
-import com.zqnt.sdk.client.livedata.domains.StreamTelemetryRequest;
-import com.zqnt.sdk.client.livedata.domains.StreamTelemetryResponse;
+import com.zqnt.sdk.client.livedata.domains.*;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -28,6 +22,9 @@ public interface LiveData {
      */
     StreamHandle streamTelemetryData(StreamTelemetryRequest request,
                                      Consumer<StreamTelemetryResponse> onData);
+
+    StreamHandle streamNotifications(StreamNotificationRequest request, Consumer<StreamNotificationResponse> onData,
+                                     Consumer<Throwable> onError);
 
     CompletableFuture<LiveDataResponse> startLiveStream(LiveDataStartLiveStreamRequest request);
 

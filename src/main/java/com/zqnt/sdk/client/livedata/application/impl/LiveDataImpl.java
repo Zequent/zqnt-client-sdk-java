@@ -6,6 +6,7 @@ import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.livedata.application.LiveDataMapper;
 import com.zqnt.sdk.client.livedata.domains.*;
 import com.zqnt.utils.livedata.proto.LiveDataServiceGrpc;
+import com.zqnt.utils.livedata.proto.LiveDataNotificationResponse;
 import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
@@ -23,7 +24,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  * Internal Live Data streaming client using standard gRPC stubs.
  * NOT exposed as a CDI bean - only accessible via ZequentClient.
  * Includes built-in retry logic, circuit breaker, and reconnection handling.
- *
+ * <p>
  * Performance optimizations:
  * - Uses standard gRPC stubs (no Mutiny/Quarkus overhead)
  * - CompletableFuture for async unary calls
@@ -33,449 +34,605 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 @Slf4j
 public class LiveDataImpl implements LiveData {
 
-	private final LiveDataServiceGrpc.LiveDataServiceStub asyncStub;
-	private final LiveDataServiceGrpc.LiveDataServiceFutureStub futureStub;
-	private final GrpcResilience resilience;
-	private final GrpcClientConfig config;
-	private final LiveDataMapper liveDataMapper;
-	private final ExecutorService streamExecutor;
-	private final ScheduledExecutorService timeoutScheduler;
+    private final LiveDataServiceGrpc.LiveDataServiceStub asyncStub;
+    private final LiveDataServiceGrpc.LiveDataServiceFutureStub futureStub;
+    private final GrpcResilience resilience;
+    private final GrpcClientConfig config;
+    private final LiveDataMapper liveDataMapper;
+    private final ExecutorService streamExecutor;
+    private final ScheduledExecutorService timeoutScheduler;
 
-	/**
-	 * Private constructor - use create() factory method.
-	 */
-	private LiveDataImpl(GrpcClientConfig config, ManagedChannel channel,
-						 LiveDataMapper liveDataMapper) {
-		this.config = config;
-		this.resilience = new GrpcResilience(
-				config.getMaxRetryAttempts(),
-				config.getRetryDelayMillis(),
-				config.getCircuitBreakerFailureThreshold(),
-				config.getCircuitBreakerWaitDurationMillis()
-		);
-		this.asyncStub = LiveDataServiceGrpc.newStub(channel);
-		this.futureStub = LiveDataServiceGrpc.newFutureStub(channel);
-		this.liveDataMapper = liveDataMapper;
+    /**
+     * Private constructor - use create() factory method.
+     */
+    private LiveDataImpl(GrpcClientConfig config, ManagedChannel channel,
+                         LiveDataMapper liveDataMapper) {
+        this.config = config;
+        this.resilience = new GrpcResilience(
+                config.getMaxRetryAttempts(),
+                config.getRetryDelayMillis(),
+                config.getCircuitBreakerFailureThreshold(),
+                config.getCircuitBreakerWaitDurationMillis()
+        );
+        this.asyncStub = LiveDataServiceGrpc.newStub(channel);
+        this.futureStub = LiveDataServiceGrpc.newFutureStub(channel);
+        this.liveDataMapper = liveDataMapper;
 
-		// Dedicated thread pool for stream processing — fixed size + bounded queue with CallerRunsPolicy
-		// to avoid unbounded thread growth and apply backpressure when the consumer is slow.
-		int coreThreads = Math.max(2, Runtime.getRuntime().availableProcessors());
-		ThreadFactory streamThreadFactory = r -> {
-			Thread t = new Thread(r, "livedata-stream-handler");
-			t.setDaemon(true);
-			return t;
-		};
-		this.streamExecutor = new ThreadPoolExecutor(
-				coreThreads, coreThreads,
-				60L, TimeUnit.SECONDS,
-				new LinkedBlockingQueue<>(1000),
-				streamThreadFactory,
-				new ThreadPoolExecutor.CallerRunsPolicy()
-		);
+        // Dedicated thread pool for stream processing — fixed size + bounded queue with CallerRunsPolicy
+        // to avoid unbounded thread growth and apply backpressure when the consumer is slow.
+        int coreThreads = Math.max(2, Runtime.getRuntime().availableProcessors());
+        ThreadFactory streamThreadFactory = r -> {
+            Thread t = new Thread(r, "livedata-stream-handler");
+            t.setDaemon(true);
+            return t;
+        };
+        this.streamExecutor = new ThreadPoolExecutor(
+                coreThreads, coreThreads,
+                60L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(1000),
+                streamThreadFactory,
+                new ThreadPoolExecutor.CallerRunsPolicy()
+        );
 
-		// Scheduler for timeout handling
-		this.timeoutScheduler = Executors.newScheduledThreadPool(1, r -> {
-			Thread t = new Thread(r, "livedata-timeout-scheduler");
-			t.setDaemon(true);
-			return t;
-		});
+        // Scheduler for timeout handling
+        this.timeoutScheduler = Executors.newScheduledThreadPool(1, r -> {
+            Thread t = new Thread(r, "livedata-timeout-scheduler");
+            t.setDaemon(true);
+            return t;
+        });
 
-		log.debug("LiveData created with channel for {}:{}",
-				config.getLiveDataConfig().getHost(),
-				config.getLiveDataConfig().getPort());
-	}
+        log.debug("LiveData created with channel for {}:{}",
+                config.getLiveDataConfig().getHost(),
+                config.getLiveDataConfig().getPort());
+    }
 
-	/**
-	 * Factory method to create LiveData implementation.
-	 * Called by ZequentClientProducer.
-	 */
-	public static LiveDataImpl create(GrpcClientConfig config, ManagedChannel channel) {
-		return new LiveDataImpl(config, channel, LiveDataMapper.INSTANCE);
-	}
+    /**
+     * Factory method to create LiveData implementation.
+     * Called by ZequentClientProducer.
+     */
+    public static LiveDataImpl create(GrpcClientConfig config, ManagedChannel channel) {
+        return new LiveDataImpl(config, channel, LiveDataMapper.INSTANCE);
+    }
 
-	/**
-	 * Starts streaming telemetry data with automatic reconnection on failure.
-	 * Reconnects up to {@code maxRetryAttempts} times (from config) with exponential backoff.
-	 * If data was received before a disconnect, the attempt counter resets (treats it as a blip).
-	 *
-	 * @return a {@link StreamHandle} — call {@code stop()} to cancel the stream and reconnection
-	 */
-	@Override
-	public StreamHandle streamTelemetryData(StreamTelemetryRequest request,
-											Consumer<StreamTelemetryResponse> onData,
-											Consumer<Throwable> onError) {
-		StreamHandle handle = new StreamHandle();
-		startStream(request, onData, onError, handle, 0);
-		return handle;
-	}
+    /**
+     * Starts streaming telemetry data with automatic reconnection on failure.
+     * Reconnects up to {@code maxRetryAttempts} times (from config) with exponential backoff.
+     * If data was received before a disconnect, the attempt counter resets (treats it as a blip).
+     *
+     * @return a {@link StreamHandle} — call {@code stop()} to cancel the stream and reconnection
+     */
+    @Override
+    public StreamHandle streamTelemetryData(StreamTelemetryRequest request,
+                                            Consumer<StreamTelemetryResponse> onData,
+                                            Consumer<Throwable> onError) {
+        StreamHandle handle = new StreamHandle();
+        startTelemetryStream(request, onData, onError, handle, 0);
+        return handle;
+    }
 
-	/**
-	 * Convenience overload — errors are logged automatically.
-	 *
-	 * @return a {@link StreamHandle} — call {@code stop()} to cancel the stream and reconnection
-	 */
-	@Override
-	public StreamHandle streamTelemetryData(StreamTelemetryRequest request,
-											Consumer<StreamTelemetryResponse> onData) {
-		return streamTelemetryData(request, onData,
-				error -> log.error("Unhandled stream error (use the overload with onError to handle this): {}", error.getMessage(), error));
-	}
+    @Override
+    public StreamHandle streamNotifications(StreamNotificationRequest request, Consumer<StreamNotificationResponse> onData, Consumer<Throwable> onError) {
+        StreamHandle handle = new StreamHandle();
+        startNotificationStream(request, onData, onError, handle, 0);
+        return handle;
+    }
 
-	private void startStream(StreamTelemetryRequest request,
-							 Consumer<StreamTelemetryResponse> onData,
-							 Consumer<Throwable> onError,
-							 StreamHandle handle,
-							 int reconnectAttempt) {
-		if (handle.isStopped()) {
-			return;
-		}
+    private void startNotificationStream(StreamNotificationRequest request,
+                                         Consumer<StreamNotificationResponse> onData,
+                                         Consumer<Throwable> onError,
+                                         StreamHandle handle,
+                                         int reconnectAttempt) {
+        if (handle.isStopped()) {
+            return;
+        }
 
-		try {
-			resilience.checkCircuitBreaker();
-		} catch (RuntimeException e) {
-			log.warn("Rejecting stream request - circuit breaker is OPEN: {}", e.getMessage());
-			if (onError != null) {
-				onError.accept(e);
-			}
-			return;
-		}
+        try {
+            resilience.checkCircuitBreaker();
+        } catch (RuntimeException e) {
+            log.warn("Rejecting notification stream request - circuit breaker is OPEN: {}", e.getMessage());
+            if (onError != null) {
+                onError.accept(e);
+            }
+            return;
+        }
 
-		var protoRequest = liveDataMapper.toProtoRequest(request);
+        var protoRequest = liveDataMapper.toProtoStreamNotificationsRequest(request);
 
-		// Stop command: forward to server (server calls stopTelemetryStream + onCompleted), no reconnection
-		if (request.getCommand() == com.zqnt.utils.common.proto.LiveDataServiceCommand.LIVE_DATA_COMMAND_STOP_TELEMETRY_STREAM) {
-			log.info("Sending stop telemetry stream for sn='{}'", request.getSn());
-			handle.stop();
-			StreamObserver<LiveDataTelemetryResponse> stopObserver = new StreamObserver<>() {
-				@Override public void onNext(LiveDataTelemetryResponse value) { /* no data expected on stop */ }
-				@Override public void onError(Throwable t) {
-					log.warn("Stop telemetry stream error for sn='{}': {}", request.getSn(), t.getMessage());
-					if (onError != null) onError.accept(t);
-				}
-				@Override public void onCompleted() {
-					log.debug("Stop telemetry stream acknowledged for sn='{}'", request.getSn());
-				}
-			};
-			try {
-				asyncStub.streamTelemetry(protoRequest, stopObserver);
-			} catch (Exception e) {
-				log.error("Failed to send stop stream request: {}", e.getMessage(), e);
-				if (onError != null) onError.accept(e);
-			}
-			return;
-		}
+        int inactivityTimeoutSeconds = 5 * 60;
+        int maxAttempts = config != null ? config.getMaxRetryAttempts() : 3;
+        long baseDelayMillis = config != null ? config.getRetryDelayMillis() : 1000L;
+        long maxDelayMillis = 30_000L;
 
-		// Inactivity timeout for streaming: 5 minutes by default (unrelated to unary requestTimeoutSeconds)
-		int inactivityTimeoutSeconds = 5 * 60;
-		int maxAttempts = config != null ? config.getMaxRetryAttempts() : 3;
-		long baseDelayMillis = config != null ? config.getRetryDelayMillis() : 1000L;
-		long maxDelayMillis = 30_000L;
+        AtomicBoolean streamEnded = new AtomicBoolean(false);
+        AtomicBoolean dataReceived = new AtomicBoolean(false);
+        AtomicLong lastReceivedAt = new AtomicLong(System.currentTimeMillis());
+        long inactivityTimeoutMillis = (long) inactivityTimeoutSeconds * 1000;
+        long checkIntervalSeconds = Math.max(10L, inactivityTimeoutSeconds / 6L);
+        AtomicReference<ScheduledFuture<?>> periodicCheckRef = new AtomicReference<>();
 
-		AtomicBoolean streamEnded = new AtomicBoolean(false);
-		AtomicBoolean dataReceived = new AtomicBoolean(false);
-		AtomicLong lastReceivedAt = new AtomicLong(System.currentTimeMillis());
-		long inactivityTimeoutMillis = (long) inactivityTimeoutSeconds * 1000;
-		long checkIntervalSeconds = Math.max(10L, inactivityTimeoutSeconds / 6L);
-		AtomicReference<ScheduledFuture<?>> periodicCheckRef = new AtomicReference<>();
+        ScheduledFuture<?> periodicCheck = timeoutScheduler.scheduleAtFixedRate(() -> {
+            if (streamEnded.get() || handle.isStopped()) {
+                return;
+            }
+            if (System.currentTimeMillis() - lastReceivedAt.get() < inactivityTimeoutMillis) {
+                return;
+            }
+            streamEnded.set(true);
+            ScheduledFuture<?> self = periodicCheckRef.get();
+            if (self != null) self.cancel(false);
 
-		// Single periodic task instead of reschedule-on-every-message:
-		// avoids ScheduledExecutorService lock contention at high telemetry frequency.
-		ScheduledFuture<?> periodicCheck = timeoutScheduler.scheduleAtFixedRate(() -> {
-			if (streamEnded.get() || handle.isStopped()) {
-				return;
-			}
-			if (System.currentTimeMillis() - lastReceivedAt.get() < inactivityTimeoutMillis) {
-				return;
-			}
-			streamEnded.set(true);
-			ScheduledFuture<?> self = periodicCheckRef.get();
-			if (self != null) self.cancel(false);
+            log.warn("Notification stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
 
-			log.warn("Stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
+            int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
 
-			// Reconnect: if data was received before, treat as blip and reset counter
-			int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
+            if (nextAttempt > maxAttempts) {
+                String msg = "Notification stream inactive for " + inactivityTimeoutSeconds + "s and max reconnect attempts (" + maxAttempts + ") reached";
+                log.error(msg);
+                if (onError != null) {
+                    onError.accept(new TimeoutException(msg));
+                }
+                return;
+            }
 
-			if (nextAttempt > maxAttempts) {
-				String msg = "Stream inactive for " + inactivityTimeoutSeconds + "s and max reconnect attempts (" + maxAttempts + ") reached";
-				log.error(msg);
-				if (onError != null) {
-					onError.accept(new TimeoutException(msg));
-				}
-				return;
-			}
+            long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+            log.warn("Reconnecting notification stream after inactivity timeout (attempt {}/{}), delay {}ms",
+                    nextAttempt, maxAttempts, delay);
+            timeoutScheduler.schedule(() -> {
+                if (!handle.isStopped()) {
+                    startNotificationStream(request, onData, onError, handle, nextAttempt);
+                }
+            }, delay, MILLISECONDS);
+        }, checkIntervalSeconds, checkIntervalSeconds, TimeUnit.SECONDS);
 
-			long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
-			log.warn("Reconnecting after inactivity timeout (attempt {}/{}), delay {}ms",
-					nextAttempt, maxAttempts, delay);
-			timeoutScheduler.schedule(() -> {
-				if (!handle.isStopped()) {
-					startStream(request, onData, onError, handle, nextAttempt);
-				}
-			}, delay, MILLISECONDS);
-		}, checkIntervalSeconds, checkIntervalSeconds, TimeUnit.SECONDS);
+        periodicCheckRef.set(periodicCheck);
 
-		periodicCheckRef.set(periodicCheck);
+        StreamObserver<LiveDataNotificationResponse> observer = new StreamObserver<>() {
+            @Override
+            public void onNext(LiveDataNotificationResponse protoResponse) {
+                if (streamEnded.get()) {
+                    return;
+                }
+                dataReceived.set(true);
+                lastReceivedAt.set(System.currentTimeMillis());
 
-		StreamObserver<LiveDataTelemetryResponse> observer = new StreamObserver<>() {
-			@Override
-			public void onNext(LiveDataTelemetryResponse protoResponse) {
-				// Ignore data from a zombie stream that was replaced after a timeout-triggered reconnect
-				if (streamEnded.get()) {
-					return;
-				}
-				dataReceived.set(true);
-				lastReceivedAt.set(System.currentTimeMillis());
+                streamExecutor.execute(() -> {
+                    try {
+                        var pojoResponse = liveDataMapper.fromProtoNotificationResponse(protoResponse);
+                        onData.accept(pojoResponse);
+                        resilience.recordSuccess();
+                    } catch (Exception e) {
+                        log.error("Error processing notification stream item: {}", e.getMessage(), e);
+                        if (onError != null) {
+                            onError.accept(e);
+                        }
+                    }
+                });
+            }
 
-				// Proto-to-POJO mapping is moved into the executor to avoid blocking the gRPC Netty I/O thread.
-				streamExecutor.execute(() -> {
-					try {
-						var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
-						onData.accept(pojoResponse);
-						resilience.recordSuccess();
-					} catch (Exception e) {
-						log.error("Error processing stream item: {}", e.getMessage(), e);
-						if (onError != null) {
-							onError.accept(e);
-						}
-					}
-				});
-			}
+            @Override
+            public void onError(Throwable error) {
+                streamEnded.set(true);
+                ScheduledFuture<?> check = periodicCheckRef.get();
+                if (check != null) check.cancel(false);
 
-			@Override
-			public void onError(Throwable error) {
-				streamEnded.set(true);
-				ScheduledFuture<?> check = periodicCheckRef.get();
-				if (check != null) check.cancel(false);
+                resilience.recordFailure(error);
 
-				resilience.recordFailure(error);
+                if (handle.isStopped()) {
+                    return;
+                }
 
-				if (handle.isStopped()) {
-					return;
-				}
+                int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
 
-				// If data was received, treat disconnect as a blip and reset attempt counter
-				int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
+                if (nextAttempt > maxAttempts) {
+                    log.error("Notification stream failed after {} reconnect attempts, giving up: {}", reconnectAttempt, error.getMessage(), error);
+                    if (onError != null) {
+                        onError.accept(error);
+                    }
+                    return;
+                }
 
-				if (nextAttempt > maxAttempts) {
-					log.error("Stream failed after {} reconnect attempts, giving up: {}", reconnectAttempt, error.getMessage(), error);
-					if (onError != null) {
-						onError.accept(error);
-					}
-					return;
-				}
+                long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+                log.warn("Notification stream error (attempt {}/{}), reconnecting in {}ms: {}",
+                        nextAttempt, maxAttempts, delay, error.getMessage());
 
-				long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
-				log.warn("Stream error (attempt {}/{}), reconnecting in {}ms: {}",
-						nextAttempt, maxAttempts, delay, error.getMessage());
+                timeoutScheduler.schedule(() -> {
+                    if (!handle.isStopped()) {
+                        startNotificationStream(request, onData, onError, handle, nextAttempt);
+                    }
+                }, delay, MILLISECONDS);
+            }
 
-				timeoutScheduler.schedule(() -> {
-					if (!handle.isStopped()) {
-						startStream(request, onData, onError, handle, nextAttempt);
-					}
-				}, delay, MILLISECONDS);
-			}
+            @Override
+            public void onCompleted() {
+                streamEnded.set(true);
+                ScheduledFuture<?> check = periodicCheckRef.get();
+                if (check != null) check.cancel(false);
+                log.debug("Notification stream completed");
+            }
+        };
 
-			@Override
-			public void onCompleted() {
-				streamEnded.set(true);
-				ScheduledFuture<?> check = periodicCheckRef.get();
-				if (check != null) check.cancel(false);
-				log.debug("Stream completed");
-			}
-		};
+        try {
+            asyncStub.streamNotifications(protoRequest, observer);
+        } catch (Exception e) {
+            log.error("Failed to start notification stream: {}", e.getMessage(), e);
+            if (onError != null) {
+                onError.accept(e);
+            }
+        }
+    }
 
-		try {
-			asyncStub.streamTelemetry(protoRequest, observer);
-		} catch (Exception e) {
-			log.error("Failed to start stream: {}", e.getMessage(), e);
-			if (onError != null) {
-				onError.accept(e);
-			}
-		}
-	}
+    /**
+     * Convenience overload — errors are logged automatically.
+     *
+     * @return a {@link StreamHandle} — call {@code stop()} to cancel the stream and reconnection
+     */
+    @Override
+    public StreamHandle streamTelemetryData(StreamTelemetryRequest request,
+                                            Consumer<StreamTelemetryResponse> onData) {
+        return streamTelemetryData(request, onData,
+                error -> log.error("Unhandled stream error (use the overload with onError to handle this): {}", error.getMessage(), error));
+    }
 
-	/**
-	 * Start live stream for an asset.
-	 * Uses ListenableFuture from gRPC for optimal performance.
-	 *
-	 * @param request The start live stream request (POJO)
-	 * @return CompletableFuture with the response
-	 */
-	@Override
-	public CompletableFuture<LiveDataResponse> startLiveStream(LiveDataStartLiveStreamRequest request) {
-		log.info("Starting live stream for SN: {}, videoId: {}", request.getSn(), request.getVideoId());
+    private void startTelemetryStream(StreamTelemetryRequest request,
+                                      Consumer<StreamTelemetryResponse> onData,
+                                      Consumer<Throwable> onError,
+                                      StreamHandle handle,
+                                      int reconnectAttempt) {
+        if (handle.isStopped()) {
+            return;
+        }
 
-		var protoRequest = liveDataMapper.toProtoStartLiveStreamRequest(request);
-		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+        try {
+            resilience.checkCircuitBreaker();
+        } catch (RuntimeException e) {
+            log.warn("Rejecting stream request - circuit breaker is OPEN: {}", e.getMessage());
+            if (onError != null) {
+                onError.accept(e);
+            }
+            return;
+        }
 
-		return resilience.executeWithResilienceAsync(() -> {
-			CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+        var protoRequest = liveDataMapper.toProtoRequest(request);
 
-			// Convert ListenableFuture to CompletableFuture with timeout
-			var listenableFuture = futureStub.startLiveStream(protoRequest);
+        // Stop command: forward to server (server calls stopTelemetryStream + onCompleted), no reconnection
+        if (request.getCommand() == com.zqnt.utils.common.proto.LiveDataServiceCommand.LIVE_DATA_COMMAND_STOP_TELEMETRY_STREAM) {
+            log.info("Sending stop telemetry stream for sn='{}'", request.getSn());
+            handle.stop();
+            StreamObserver<LiveDataTelemetryResponse> stopObserver = new StreamObserver<>() {
+                @Override
+                public void onNext(LiveDataTelemetryResponse value) { /* no data expected on stop */ }
 
-			// Set timeout
-			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-				future.completeExceptionally(new TimeoutException("Start live stream timed out after " + timeout + "s"));
-			}, timeout, TimeUnit.SECONDS);
+                @Override
+                public void onError(Throwable t) {
+                    log.warn("Stop telemetry stream error for sn='{}': {}", request.getSn(), t.getMessage());
+                    if (onError != null) onError.accept(t);
+                }
 
-			com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
-				new com.google.common.util.concurrent.FutureCallback<>() {
-					@Override
-					public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
-						timeoutTask.cancel(false);
-						future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
-					}
+                @Override
+                public void onCompleted() {
+                    log.debug("Stop telemetry stream acknowledged for sn='{}'", request.getSn());
+                }
+            };
+            try {
+                asyncStub.streamTelemetry(protoRequest, stopObserver);
+            } catch (Exception e) {
+                log.error("Failed to send stop stream request: {}", e.getMessage(), e);
+                if (onError != null) onError.accept(e);
+            }
+            return;
+        }
 
-					@Override
-					public void onFailure(Throwable t) {
-						timeoutTask.cancel(false);
-						future.completeExceptionally(t);
-					}
-				},
-				streamExecutor
-			);
+        // Inactivity timeout for streaming: 5 minutes by default (unrelated to unary requestTimeoutSeconds)
+        int inactivityTimeoutSeconds = 5 * 60;
+        int maxAttempts = config != null ? config.getMaxRetryAttempts() : 3;
+        long baseDelayMillis = config != null ? config.getRetryDelayMillis() : 1000L;
+        long maxDelayMillis = 30_000L;
 
-			return future;
-		});
-	}
+        AtomicBoolean streamEnded = new AtomicBoolean(false);
+        AtomicBoolean dataReceived = new AtomicBoolean(false);
+        AtomicLong lastReceivedAt = new AtomicLong(System.currentTimeMillis());
+        long inactivityTimeoutMillis = (long) inactivityTimeoutSeconds * 1000;
+        long checkIntervalSeconds = Math.max(10L, inactivityTimeoutSeconds / 6L);
+        AtomicReference<ScheduledFuture<?>> periodicCheckRef = new AtomicReference<>();
 
-	/**
-	 * Stop live stream for an asset.
-	 *
-	 * @param request The stop live stream request (POJO)
-	 * @return CompletableFuture with the response
-	 */
-	@Override
-	public CompletableFuture<LiveDataResponse> stopLiveStream(LiveDataStopLiveStreamRequest request) {
-		log.info("Stopping live stream for SN: {}, videoId: {}", request.getSn(), request.getVideoId());
+        // Single periodic task instead of reschedule-on-every-message:
+        // avoids ScheduledExecutorService lock contention at high telemetry frequency.
+        ScheduledFuture<?> periodicCheck = timeoutScheduler.scheduleAtFixedRate(() -> {
+            if (streamEnded.get() || handle.isStopped()) {
+                return;
+            }
+            if (System.currentTimeMillis() - lastReceivedAt.get() < inactivityTimeoutMillis) {
+                return;
+            }
+            streamEnded.set(true);
+            ScheduledFuture<?> self = periodicCheckRef.get();
+            if (self != null) self.cancel(false);
 
-		var protoRequest = liveDataMapper.toProtoStopLiveStreamRequest(request);
-		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+            log.warn("Stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
 
-		return resilience.executeWithResilienceAsync(() -> {
-			CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+            // Reconnect: if data was received before, treat as blip and reset counter
+            int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
 
-			var listenableFuture = futureStub.stopLiveStream(protoRequest);
+            if (nextAttempt > maxAttempts) {
+                String msg = "Stream inactive for " + inactivityTimeoutSeconds + "s and max reconnect attempts (" + maxAttempts + ") reached";
+                log.error(msg);
+                if (onError != null) {
+                    onError.accept(new TimeoutException(msg));
+                }
+                return;
+            }
 
-			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-				future.completeExceptionally(new TimeoutException("Stop live stream timed out after " + timeout + "s"));
-			}, timeout, TimeUnit.SECONDS);
+            long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+            log.warn("Reconnecting after inactivity timeout (attempt {}/{}), delay {}ms",
+                    nextAttempt, maxAttempts, delay);
+            timeoutScheduler.schedule(() -> {
+                if (!handle.isStopped()) {
+                    startTelemetryStream(request, onData, onError, handle, nextAttempt);
+                }
+            }, delay, MILLISECONDS);
+        }, checkIntervalSeconds, checkIntervalSeconds, TimeUnit.SECONDS);
 
-			com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
-				new com.google.common.util.concurrent.FutureCallback<>() {
-					@Override
-					public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
-						timeoutTask.cancel(false);
-						future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
-					}
+        periodicCheckRef.set(periodicCheck);
 
-					@Override
-					public void onFailure(Throwable t) {
-						timeoutTask.cancel(false);
-						future.completeExceptionally(t);
-					}
-				},
-				streamExecutor
-			);
+        StreamObserver<LiveDataTelemetryResponse> observer = new StreamObserver<>() {
+            @Override
+            public void onNext(LiveDataTelemetryResponse protoResponse) {
+                // Ignore data from a zombie stream that was replaced after a timeout-triggered reconnect
+                if (streamEnded.get()) {
+                    return;
+                }
+                dataReceived.set(true);
+                lastReceivedAt.set(System.currentTimeMillis());
 
-			return future;
-		});
-	}
+                // Proto-to-POJO mapping is moved into the executor to avoid blocking the gRPC Netty I/O thread.
+                streamExecutor.execute(() -> {
+                    try {
+                        var pojoResponse = liveDataMapper.fromProtoResponse(protoResponse);
+                        onData.accept(pojoResponse);
+                        resilience.recordSuccess();
+                    } catch (Exception e) {
+                        log.error("Error processing stream item: {}", e.getMessage(), e);
+                        if (onError != null) {
+                            onError.accept(e);
+                        }
+                    }
+                });
+            }
 
-	@Override
-	public CompletableFuture<LiveDataResponse> changeCameraLens(ChangeLensRequest request) {
-		log.info("Changing camera lens for SN: {}", request.getSn());
+            @Override
+            public void onError(Throwable error) {
+                streamEnded.set(true);
+                ScheduledFuture<?> check = periodicCheckRef.get();
+                if (check != null) check.cancel(false);
 
-		var protoRequest = liveDataMapper.toProtoChangeLensRequest(request);
-		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+                resilience.recordFailure(error);
 
-		return resilience.executeWithResilienceAsync(() -> {
-			CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+                if (handle.isStopped()) {
+                    return;
+                }
 
-			var listenableFuture = futureStub.changeLens(protoRequest);
+                // If data was received, treat disconnect as a blip and reset attempt counter
+                int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
 
-			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-				future.completeExceptionally(new TimeoutException("Change lens timed out after " + timeout + "s"));
-			}, timeout, TimeUnit.SECONDS);
+                if (nextAttempt > maxAttempts) {
+                    log.error("Stream failed after {} reconnect attempts, giving up: {}", reconnectAttempt, error.getMessage(), error);
+                    if (onError != null) {
+                        onError.accept(error);
+                    }
+                    return;
+                }
 
-			com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
-				new com.google.common.util.concurrent.FutureCallback<>() {
-					@Override
-					public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
-						timeoutTask.cancel(false);
-						future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
-					}
+                long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+                log.warn("Stream error (attempt {}/{}), reconnecting in {}ms: {}",
+                        nextAttempt, maxAttempts, delay, error.getMessage());
 
-					@Override
-					public void onFailure(Throwable t) {
-						timeoutTask.cancel(false);
-						future.completeExceptionally(t);
-					}
-				},
-				streamExecutor
-			);
+                timeoutScheduler.schedule(() -> {
+                    if (!handle.isStopped()) {
+                        startTelemetryStream(request, onData, onError, handle, nextAttempt);
+                    }
+                }, delay, MILLISECONDS);
+            }
 
-			return future;
-		});
-	}
+            @Override
+            public void onCompleted() {
+                streamEnded.set(true);
+                ScheduledFuture<?> check = periodicCheckRef.get();
+                if (check != null) check.cancel(false);
+                log.debug("Stream completed");
+            }
+        };
 
-	@Override
-	public CompletableFuture<LiveDataResponse> changeCameraZoom(ChangeZoomRequest request) {
-		log.info("Changing camera zoom for SN: {}", request.getSn());
+        try {
+            asyncStub.streamTelemetry(protoRequest, observer);
+        } catch (Exception e) {
+            log.error("Failed to start stream: {}", e.getMessage(), e);
+            if (onError != null) {
+                onError.accept(e);
+            }
+        }
+    }
 
-		var protoRequest = liveDataMapper.toProtoChangeZoomRequest(request);
-		int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+    /**
+     * Start live stream for an asset.
+     * Uses ListenableFuture from gRPC for optimal performance.
+     *
+     * @param request The start live stream request (POJO)
+     * @return CompletableFuture with the response
+     */
+    @Override
+    public CompletableFuture<LiveDataResponse> startLiveStream(LiveDataStartLiveStreamRequest request) {
+        log.info("Starting live stream for SN: {}, videoId: {}", request.getSn(), request.getVideoId());
 
-		return resilience.executeWithResilienceAsync(() -> {
-			CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+        var protoRequest = liveDataMapper.toProtoStartLiveStreamRequest(request);
+        int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
-			var listenableFuture = futureStub.changeZoom(protoRequest);
+        return resilience.executeWithResilienceAsync(() -> {
+            CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
 
-			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-				future.completeExceptionally(new TimeoutException("Change zoom timed out after " + timeout + "s"));
-			}, timeout, TimeUnit.SECONDS);
+            // Convert ListenableFuture to CompletableFuture with timeout
+            var listenableFuture = futureStub.startLiveStream(protoRequest);
 
-			com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
-				new com.google.common.util.concurrent.FutureCallback<>() {
-					@Override
-					public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
-						timeoutTask.cancel(false);
-						future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
-					}
+            // Set timeout
+            ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+                future.completeExceptionally(new TimeoutException("Start live stream timed out after " + timeout + "s"));
+            }, timeout, TimeUnit.SECONDS);
 
-					@Override
-					public void onFailure(Throwable t) {
-						timeoutTask.cancel(false);
-						future.completeExceptionally(t);
-					}
-				},
-				streamExecutor
-			);
+            com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+                    new com.google.common.util.concurrent.FutureCallback<>() {
+                        @Override
+                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                            timeoutTask.cancel(false);
+                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                        }
 
-			return future;
-		});
-	}
+                        @Override
+                        public void onFailure(Throwable t) {
+                            timeoutTask.cancel(false);
+                            future.completeExceptionally(t);
+                        }
+                    },
+                    streamExecutor
+            );
 
-	/**
-	 * Shutdown executors when done.
-	 * Should be called when closing the client.
-	 */
-	public void shutdown() {
-		streamExecutor.shutdown();
-		timeoutScheduler.shutdown();
-		try {
-			if (!streamExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-				streamExecutor.shutdownNow();
-			}
-			if (!timeoutScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-				timeoutScheduler.shutdownNow();
-			}
-		} catch (InterruptedException e) {
-			streamExecutor.shutdownNow();
-			timeoutScheduler.shutdownNow();
-			Thread.currentThread().interrupt();
-		}
-	}
+            return future;
+        });
+    }
+
+    /**
+     * Stop live stream for an asset.
+     *
+     * @param request The stop live stream request (POJO)
+     * @return CompletableFuture with the response
+     */
+    @Override
+    public CompletableFuture<LiveDataResponse> stopLiveStream(LiveDataStopLiveStreamRequest request) {
+        log.info("Stopping live stream for SN: {}, videoId: {}", request.getSn(), request.getVideoId());
+
+        var protoRequest = liveDataMapper.toProtoStopLiveStreamRequest(request);
+        int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+
+        return resilience.executeWithResilienceAsync(() -> {
+            CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+
+            var listenableFuture = futureStub.stopLiveStream(protoRequest);
+
+            ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+                future.completeExceptionally(new TimeoutException("Stop live stream timed out after " + timeout + "s"));
+            }, timeout, TimeUnit.SECONDS);
+
+            com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+                    new com.google.common.util.concurrent.FutureCallback<>() {
+                        @Override
+                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                            timeoutTask.cancel(false);
+                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                        }
+
+                        @Override
+                        public void onFailure(Throwable t) {
+                            timeoutTask.cancel(false);
+                            future.completeExceptionally(t);
+                        }
+                    },
+                    streamExecutor
+            );
+
+            return future;
+        });
+    }
+
+    @Override
+    public CompletableFuture<LiveDataResponse> changeCameraLens(ChangeLensRequest request) {
+        log.info("Changing camera lens for SN: {}", request.getSn());
+
+        var protoRequest = liveDataMapper.toProtoChangeLensRequest(request);
+        int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+
+        return resilience.executeWithResilienceAsync(() -> {
+            CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+
+            var listenableFuture = futureStub.changeLens(protoRequest);
+
+            ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+                future.completeExceptionally(new TimeoutException("Change lens timed out after " + timeout + "s"));
+            }, timeout, TimeUnit.SECONDS);
+
+            com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+                    new com.google.common.util.concurrent.FutureCallback<>() {
+                        @Override
+                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                            timeoutTask.cancel(false);
+                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                        }
+
+                        @Override
+                        public void onFailure(Throwable t) {
+                            timeoutTask.cancel(false);
+                            future.completeExceptionally(t);
+                        }
+                    },
+                    streamExecutor
+            );
+
+            return future;
+        });
+    }
+
+    @Override
+    public CompletableFuture<LiveDataResponse> changeCameraZoom(ChangeZoomRequest request) {
+        log.info("Changing camera zoom for SN: {}", request.getSn());
+
+        var protoRequest = liveDataMapper.toProtoChangeZoomRequest(request);
+        int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
+
+        return resilience.executeWithResilienceAsync(() -> {
+            CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+
+            var listenableFuture = futureStub.changeZoom(protoRequest);
+
+            ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+                future.completeExceptionally(new TimeoutException("Change zoom timed out after " + timeout + "s"));
+            }, timeout, TimeUnit.SECONDS);
+
+            com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+                    new com.google.common.util.concurrent.FutureCallback<>() {
+                        @Override
+                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                            timeoutTask.cancel(false);
+                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                        }
+
+                        @Override
+                        public void onFailure(Throwable t) {
+                            timeoutTask.cancel(false);
+                            future.completeExceptionally(t);
+                        }
+                    },
+                    streamExecutor
+            );
+
+            return future;
+        });
+    }
+
+    /**
+     * Shutdown executors when done.
+     * Should be called when closing the client.
+     */
+    public void shutdown() {
+        streamExecutor.shutdown();
+        timeoutScheduler.shutdown();
+        try {
+            if (!streamExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                streamExecutor.shutdownNow();
+            }
+            if (!timeoutScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                timeoutScheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            streamExecutor.shutdownNow();
+            timeoutScheduler.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
 }
