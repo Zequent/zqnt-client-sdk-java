@@ -6,7 +6,7 @@ import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.livedata.application.LiveDataMapper;
 import com.zqnt.sdk.client.livedata.domains.*;
 import com.zqnt.utils.livedata.proto.LiveDataServiceGrpc;
-import com.zqnt.utils.livedata.proto.LiveDataNotificationResponse;
+import com.zqnt.utils.events.proto.NotificationResponse;
 import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
@@ -186,9 +186,9 @@ public class LiveDataImpl implements LiveData {
 
         periodicCheckRef.set(periodicCheck);
 
-        StreamObserver<LiveDataNotificationResponse> observer = new StreamObserver<>() {
+        StreamObserver<NotificationResponse> observer = new StreamObserver<>() {
             @Override
-            public void onNext(LiveDataNotificationResponse protoResponse) {
+            public void onNext(NotificationResponse protoResponse) {
                 if (streamEnded.get()) {
                     return;
                 }

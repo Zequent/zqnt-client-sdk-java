@@ -7,6 +7,13 @@ import com.zqnt.sdk.client.livedata.domains.LiveDataStartLiveStreamRequest;
 import com.zqnt.sdk.client.livedata.domains.LiveDataStopLiveStreamRequest;
 import com.zqnt.utils.common.proto.*;
 import com.zqnt.utils.core.ProtobufHelpers;
+import com.zqnt.utils.events.proto.AssetStatusEvent;
+import com.zqnt.utils.events.proto.NotificationEvent;
+import com.zqnt.utils.events.proto.NotificationEventType;
+import com.zqnt.utils.events.proto.NotificationResponse;
+import com.zqnt.utils.events.proto.OperationEvent;
+import com.zqnt.utils.events.proto.StreamNotificationsRequest;
+import com.zqnt.utils.events.proto.TaskEvent;
 import com.zqnt.utils.edge.sdk.domains.AssetTelemetryData;
 import com.zqnt.utils.edge.sdk.domains.SubAssetTelemetryData;
 import com.zqnt.utils.livedata.proto.*;
@@ -91,12 +98,12 @@ public class LiveDataMapper {
     /**
      * Maps StreamNotificationRequest POJO to proto LiveDataStreamNotificationsRequest
      */
-    public LiveDataStreamNotificationsRequest toProtoStreamNotificationsRequest(StreamNotificationRequest request) {
+    public StreamNotificationsRequest toProtoStreamNotificationsRequest(StreamNotificationRequest request) {
         if (request == null) {
             return null;
         }
 
-        var builder = LiveDataStreamNotificationsRequest.newBuilder()
+        var builder = StreamNotificationsRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), true, true));
 
         if (request.getEventTypes() != null && !request.getEventTypes().isEmpty()) {
@@ -109,7 +116,7 @@ public class LiveDataMapper {
     /**
      * Maps proto LiveDataNotificationResponse to StreamNotificationResponse POJO
      */
-    public StreamNotificationResponse fromProtoNotificationResponse(LiveDataNotificationResponse protoResponse) {
+    public StreamNotificationResponse fromProtoNotificationResponse(NotificationResponse protoResponse) {
         if (protoResponse == null) {
             return null;
         }
@@ -122,13 +129,16 @@ public class LiveDataMapper {
                 .assetId(nullable(protoResponse.hasAssetId(), protoResponse.getAssetId()))
                 .build();
 
-        switch (protoResponse.getEventCase()) {
-            case ASSET_STATUS -> response.setAssetStatus(mapAssetStatusEvent(protoResponse.getAssetStatus()));
-            case TASK_EVENT -> response.setTaskEvent(mapTaskEvent(protoResponse.getTaskEvent()));
-            case OPERATION_EVENT -> response.setOperationEvent(mapOperationEvent(protoResponse.getOperationEvent()));
-            case ERROR -> response.setError(mapNotificationErrorInfo(protoResponse.getError()));
-            case EVENT_NOT_SET -> {
-                // No event set
+        if (protoResponse.hasEvent()) {
+            NotificationEvent event = protoResponse.getEvent();
+            switch (event.getEventCase()) {
+                case ASSET_STATUS -> response.setAssetStatus(mapAssetStatusEvent(event.getAssetStatus()));
+                case TASK -> response.setTaskEvent(mapTaskEvent(event.getTask()));
+                case OPERATION -> response.setOperationEvent(mapOperationEvent(event.getOperation()));
+                case ERROR -> response.setError(mapNotificationErrorInfo(event.getError()));
+                case EVENT_NOT_SET -> {
+                    // No event set
+                }
             }
         }
 
@@ -377,11 +387,14 @@ public class LiveDataMapper {
                 .build();
     }
 
-    private NotificationEventType resolveNotificationEventType(LiveDataNotificationResponse protoResponse) {
-        return switch (protoResponse.getEventCase()) {
+    private NotificationEventType resolveNotificationEventType(NotificationResponse protoResponse) {
+        if (!protoResponse.hasEvent()) {
+            return null;
+        }
+        return switch (protoResponse.getEvent().getEventCase()) {
             case ASSET_STATUS -> NotificationEventType.NOTIFICATION_EVENT_ASSET_STATUS;
-            case TASK_EVENT -> NotificationEventType.NOTIFICATION_EVENT_TASK;
-            case OPERATION_EVENT -> NotificationEventType.NOTIFICATION_EVENT_OPERATION;
+            case TASK -> NotificationEventType.NOTIFICATION_EVENT_TASK;
+            case OPERATION -> NotificationEventType.NOTIFICATION_EVENT_OPERATION;
             case ERROR, EVENT_NOT_SET -> null;
         };
     }
@@ -416,7 +429,7 @@ public class LiveDataMapper {
             return null;
         }
 
-        var requestBuilder = com.zqnt.utils.livedata.proto.LiveStreamStartRequest.newBuilder()
+        var requestBuilder = com.zqnt.utils.common.proto.LiveStreamStartCommandPayload.newBuilder()
                 .setVideoId(request.getVideoId())
                 .setStreamServer(request.getStreamServer())
                 .setStreamType(request.getStreamType())
@@ -437,7 +450,7 @@ public class LiveDataMapper {
             return null;
         }
 
-        var requestBuilder = com.zqnt.utils.livedata.proto.LiveStreamStopRequest.newBuilder()
+        var requestBuilder = com.zqnt.utils.common.proto.LiveStreamStopCommandPayload.newBuilder()
                 .setVideoId(request.getVideoId());
 
         return com.zqnt.utils.livedata.proto.LiveDataStopLiveStreamRequest.newBuilder()

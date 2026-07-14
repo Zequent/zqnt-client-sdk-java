@@ -11,6 +11,7 @@ import com.zqnt.utils.common.proto.*;
 import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.mission.proto.*;
+import com.zqnt.utils.workflow.proto.*;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
@@ -86,7 +87,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
         var protoRequest = CreateMissionRequest.newBuilder()
                 .setBase(buildBase())
-                .setMissionDto(missionBuilder.build())
+                .setMission(missionBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createMission(protoRequest))
@@ -104,7 +105,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateMissionRequest.newBuilder()
                 .setBase(buildBase())
                 .setMissionId(missionId)
-                .setMissionDto(missionBuilder.build())
+                .setMission(missionBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateMission(protoRequest))
@@ -177,7 +178,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
         var protoRequest = CreateTaskRequest.newBuilder()
                 .setBase(buildBase())
-                .setTaskDto(taskProtoBuilder.build())
+                .setTask(taskProtoBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createTask(protoRequest))
@@ -195,7 +196,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateTaskRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
-                .setTaskDto(taskProtoBuilder.build())
+                .setTask(taskProtoBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateTask(protoRequest))
@@ -216,7 +217,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
             taskProtoBuilder.setMissionId(taskDTO.getMissionId().toString());
         }
         if (taskDTO.getTaskType() != null) {
-            taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()).name());
+            taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()));
         }
         if (taskDTO.getConfig() != null) {
             taskProtoBuilder.setConfig(JsonUtils.toJson(taskDTO.getConfig()));
@@ -258,7 +259,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<TaskResponse> getTaskByFlightId(String flightId) {
         log.info("Getting task by flightId: flightId={}", flightId);
 
-        var protoRequest = GetTaskRequest.newBuilder()
+        var protoRequest = GetTaskByFlightIdRequest.newBuilder()
                 .setBase(buildBase())
                 .setFlightId(flightId)
                 .build();
@@ -284,7 +285,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<TaskResponse> startTask(String taskId) {
         log.info("Starting task: taskId={}", taskId);
 
-        var protoRequest = StartTaskRequest.newBuilder()
+        var protoRequest = TaskLifecycleRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
@@ -297,7 +298,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<TaskResponse> stopTask(String taskId) {
         log.info("Stopping task: taskId={}", taskId);
 
-        var protoRequest = StopTaskRequest.newBuilder()
+        var protoRequest = TaskLifecycleRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
@@ -309,7 +310,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     @Override
     public CompletableFuture<TaskResponse> pauseTask(String taskId) {
         log.info("Pausing task: taskId={}", taskId);
-        var protoRequest = PauseTaskRequest.newBuilder()
+        var protoRequest = TaskLifecycleRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
@@ -320,7 +321,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     @Override
     public CompletableFuture<TaskResponse> resumeTask(String taskId) {
         log.info("Resume task: taskId={}", taskId);
-        var protoRequest = ResumeTaskRequest.newBuilder()
+        var protoRequest = TaskLifecycleRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
@@ -336,7 +337,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var schedulerBuilder = mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder(), schedulerDTO);
         var protoRequest = CreateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
-                .setSchedulerDto(schedulerBuilder.build())
+                .setScheduler(schedulerBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createScheduler(protoRequest))
@@ -375,7 +376,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
                 .setSchedulerId(schedulerId)
-                .setSchedulerDto(schedulerBuilder.build())
+                .setScheduler(schedulerBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateScheduler(protoRequest))
@@ -414,7 +415,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         log.info("Creating schedulers: count={}", schedulerDTOS.size());
         var protoRequest = CreateSchedulersRequest.newBuilder()
                 .setBase(buildBase())
-                .addAllSchedulerDtos(schedulerDTOS.stream().map(this::toSchedulerProtoDTO)
+                .addAllSchedulers(schedulerDTOS.stream().map(this::toSchedulerProtoDTO)
                 .collect(Collectors.toList()))
                 .build();
 
@@ -516,7 +517,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
 
-    private MissionResponse toMissionResponse(com.zqnt.utils.mission.proto.MissionResponse proto) {
+    private MissionResponse toMissionResponse(com.zqnt.utils.workflow.proto.MissionResponse proto) {
         var builder = MissionResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -539,8 +540,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasMissionDto()) {
-            var json = ProtoJsonUtils.toJson(proto.getMissionDto());
+        if (proto.hasMission()) {
+            var json = ProtoJsonUtils.toJson(proto.getMission());
             var missionDTO = JsonUtils.fromJson(json, MissionDTO.class);
 
             builder.missionData(missionDTO);
@@ -549,7 +550,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         return builder.build();
     }
 
-    private TaskResponse toTaskResponse(com.zqnt.utils.mission.proto.TaskResponse proto) {
+    private TaskResponse toTaskResponse(com.zqnt.utils.workflow.proto.TaskResponse proto) {
         var builder = TaskResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -572,15 +573,15 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasTaskDto()) {
-            var json = ProtoJsonUtils.toJson(proto.getTaskDto());
+        if (proto.hasTask()) {
+            var json = ProtoJsonUtils.toJson(proto.getTask());
             builder.taskData(JsonUtils.fromJson(json, TaskDTO.class));
         }
 
         return builder.build();
     }
 
-    private SchedulerResponse toSchedulerResponse(com.zqnt.utils.mission.proto.SchedulerResponse proto) {
+    private SchedulerResponse toSchedulerResponse(com.zqnt.utils.workflow.proto.SchedulerResponse proto) {
         var builder = SchedulerResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -603,8 +604,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasSchedulerDto()) {
-            var json = ProtoJsonUtils.toJson(proto.getSchedulerDto());
+        if (proto.hasScheduler()) {
+            var json = ProtoJsonUtils.toJson(proto.getScheduler());
             builder.schedulerData(JsonUtils.fromJson(json, SchedulerDTO.class));
         }
 

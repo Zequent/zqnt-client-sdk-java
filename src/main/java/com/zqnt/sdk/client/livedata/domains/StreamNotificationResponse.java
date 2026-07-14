@@ -1,7 +1,7 @@
 package com.zqnt.sdk.client.livedata.domains;
 
 import com.zqnt.utils.common.proto.ErrorCode;
-import com.zqnt.utils.livedata.proto.NotificationEventType;
+import com.zqnt.utils.events.proto.NotificationEventType;
 import com.zqnt.utils.common.proto.MissionStatus;
 import com.zqnt.utils.common.proto.MissionType;
 import com.zqnt.utils.common.proto.TaskStatus;
