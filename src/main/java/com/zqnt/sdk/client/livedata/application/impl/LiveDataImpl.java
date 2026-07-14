@@ -5,6 +5,7 @@ import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.livedata.application.LiveDataMapper;
 import com.zqnt.sdk.client.livedata.domains.*;
+import com.zqnt.utils.common.proto.CommandResponse;
 import com.zqnt.utils.livedata.proto.LiveDataServiceGrpc;
 import com.zqnt.utils.events.proto.NotificationResponse;
 import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
@@ -480,9 +481,9 @@ public class LiveDataImpl implements LiveData {
             com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
                     new com.google.common.util.concurrent.FutureCallback<>() {
                         @Override
-                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                        public void onSuccess(CommandResponse result) {
                             timeoutTask.cancel(false);
-                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                            future.complete(liveDataMapper.fromProtoCommandResponse(result));
                         }
 
                         @Override
@@ -523,9 +524,9 @@ public class LiveDataImpl implements LiveData {
             com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
                     new com.google.common.util.concurrent.FutureCallback<>() {
                         @Override
-                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                        public void onSuccess(CommandResponse result) {
                             timeoutTask.cancel(false);
-                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                            future.complete(liveDataMapper.fromProtoCommandResponse(result));
                         }
 
                         @Override
@@ -560,9 +561,9 @@ public class LiveDataImpl implements LiveData {
             com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
                     new com.google.common.util.concurrent.FutureCallback<>() {
                         @Override
-                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                        public void onSuccess(CommandResponse result) {
                             timeoutTask.cancel(false);
-                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                            future.complete(liveDataMapper.fromProtoCommandResponse(result));
                         }
 
                         @Override
@@ -597,9 +598,9 @@ public class LiveDataImpl implements LiveData {
             com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
                     new com.google.common.util.concurrent.FutureCallback<>() {
                         @Override
-                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                        public void onSuccess(CommandResponse result) {
                             timeoutTask.cancel(false);
-                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                            future.complete(liveDataMapper.fromProtoCommandResponse(result));
                         }
 
                         @Override
