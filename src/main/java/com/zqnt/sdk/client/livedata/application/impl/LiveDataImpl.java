@@ -7,8 +7,12 @@ import com.zqnt.sdk.client.livedata.application.LiveDataMapper;
 import com.zqnt.sdk.client.livedata.domains.*;
 import com.zqnt.utils.livedata.proto.LiveDataServiceGrpc;
 import com.zqnt.utils.livedata.proto.LiveDataNotificationResponse;
+import com.zqnt.utils.livedata.proto.LiveDataStreamNotificationsRequest;
+import com.zqnt.utils.livedata.proto.LiveDataStreamTelemetryRequest;
 import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
 import io.grpc.ManagedChannel;
+import io.grpc.stub.ClientCallStreamObserver;
+import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 
@@ -157,9 +161,15 @@ public class LiveDataImpl implements LiveData {
             if (System.currentTimeMillis() - lastReceivedAt.get() < inactivityTimeoutMillis) {
                 return;
             }
-            streamEnded.set(true);
+            // Claim the end-of-stream transition; bail if a real onError already handled it.
+            if (!streamEnded.compareAndSet(false, true)) {
+                return;
+            }
             ScheduledFuture<?> self = periodicCheckRef.get();
             if (self != null) self.cancel(false);
+
+            // Cancel the old wire-level call so the server drops its subscription instead of leaking it.
+            handle.cancelActiveCall("client reconnect after inactivity timeout");
 
             log.warn("Notification stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
 
@@ -186,7 +196,13 @@ public class LiveDataImpl implements LiveData {
 
         periodicCheckRef.set(periodicCheck);
 
-        StreamObserver<LiveDataNotificationResponse> observer = new StreamObserver<>() {
+        ClientResponseObserver<LiveDataStreamNotificationsRequest, LiveDataNotificationResponse> observer = new ClientResponseObserver<>() {
+            @Override
+            public void beforeStart(ClientCallStreamObserver<LiveDataStreamNotificationsRequest> requestStream) {
+                // Capture the underlying call so reconnects and stop() can cancel it.
+                handle.bindActiveCall(requestStream);
+            }
+
             @Override
             public void onNext(LiveDataNotificationResponse protoResponse) {
                 if (streamEnded.get()) {
@@ -211,7 +227,11 @@ public class LiveDataImpl implements LiveData {
 
             @Override
             public void onError(Throwable error) {
-                streamEnded.set(true);
+                // Only the winner of the transition handles the error; a cancel-induced
+                // onError (from an inactivity reconnect) finds it already set and returns.
+                if (!streamEnded.compareAndSet(false, true)) {
+                    return;
+                }
                 ScheduledFuture<?> check = periodicCheckRef.get();
                 if (check != null) check.cancel(false);
 
@@ -344,9 +364,15 @@ public class LiveDataImpl implements LiveData {
             if (System.currentTimeMillis() - lastReceivedAt.get() < inactivityTimeoutMillis) {
                 return;
             }
-            streamEnded.set(true);
+            // Claim the end-of-stream transition; bail if a real onError already handled it.
+            if (!streamEnded.compareAndSet(false, true)) {
+                return;
+            }
             ScheduledFuture<?> self = periodicCheckRef.get();
             if (self != null) self.cancel(false);
+
+            // Cancel the old wire-level call so the server drops its subscription instead of leaking it.
+            handle.cancelActiveCall("client reconnect after inactivity timeout");
 
             log.warn("Stream inactive for {}s, reconnecting...", inactivityTimeoutSeconds);
 
@@ -374,7 +400,13 @@ public class LiveDataImpl implements LiveData {
 
         periodicCheckRef.set(periodicCheck);
 
-        StreamObserver<LiveDataTelemetryResponse> observer = new StreamObserver<>() {
+        ClientResponseObserver<LiveDataStreamTelemetryRequest, LiveDataTelemetryResponse> observer = new ClientResponseObserver<>() {
+            @Override
+            public void beforeStart(ClientCallStreamObserver<LiveDataStreamTelemetryRequest> requestStream) {
+                // Capture the underlying call so reconnects and stop() can cancel it.
+                handle.bindActiveCall(requestStream);
+            }
+
             @Override
             public void onNext(LiveDataTelemetryResponse protoResponse) {
                 // Ignore data from a zombie stream that was replaced after a timeout-triggered reconnect
@@ -401,7 +433,11 @@ public class LiveDataImpl implements LiveData {
 
             @Override
             public void onError(Throwable error) {
-                streamEnded.set(true);
+                // Only the winner of the transition handles the error; a cancel-induced
+                // onError (from an inactivity reconnect) finds it already set and returns.
+                if (!streamEnded.compareAndSet(false, true)) {
+                    return;
+                }
                 ScheduledFuture<?> check = periodicCheckRef.get();
                 if (check != null) check.cancel(false);
 
