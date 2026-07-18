@@ -101,5 +101,11 @@ public interface ZequentClientProperties {
 
         @WithDefault("60")
         int requestTimeoutSeconds();
+
+        @WithDefault("300")
+        int streamInactivityTimeoutSeconds();
+
+        @WithDefault("2")
+        int liveDataSchedulerThreads();
     }
 }

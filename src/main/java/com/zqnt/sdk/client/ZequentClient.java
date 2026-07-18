@@ -148,6 +148,8 @@ public class ZequentClient implements AutoCloseable {
         private long circuitBreakerWaitDurationMillis = 30000;
         private int connectionTimeoutSeconds = 30;
         private int requestTimeoutSeconds = 60;
+        private int streamInactivityTimeoutSeconds = 5 * 60;
+        private int liveDataSchedulerThreads = 2;
         private ServiceConfig.LoadBalancerType defaultLoadBalancerType = ServiceConfig.LoadBalancerType.ROUND_ROBIN;
 
         // Service-specific builders
@@ -182,6 +184,16 @@ public class ZequentClient implements AutoCloseable {
 
         public ZequentClientBuilder requestTimeoutSeconds(int timeout) {
             this.requestTimeoutSeconds = timeout;
+            return this;
+        }
+
+        public ZequentClientBuilder streamInactivityTimeoutSeconds(int timeout) {
+            this.streamInactivityTimeoutSeconds = timeout;
+            return this;
+        }
+
+        public ZequentClientBuilder liveDataSchedulerThreads(int threads) {
+            this.liveDataSchedulerThreads = threads;
             return this;
         }
 
@@ -222,6 +234,8 @@ public class ZequentClient implements AutoCloseable {
                     .circuitBreakerWaitDurationMillis(circuitBreakerWaitDurationMillis)
                     .connectionTimeoutSeconds(connectionTimeoutSeconds)
                     .requestTimeoutSeconds(requestTimeoutSeconds)
+                    .streamInactivityTimeoutSeconds(streamInactivityTimeoutSeconds)
+                    .liveDataSchedulerThreads(liveDataSchedulerThreads)
                     .defaultLoadBalancerType(defaultLoadBalancerType)
                     .build();
 

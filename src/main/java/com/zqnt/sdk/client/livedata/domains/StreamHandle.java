@@ -4,6 +4,7 @@ import io.grpc.stub.ClientCallStreamObserver;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Future;
 
 /**
  * Handle for a running telemetry stream.
@@ -19,12 +20,17 @@ public class StreamHandle implements AutoCloseable {
      * stream instead of leaving it open on the transport.
      */
     private final AtomicReference<ClientCallStreamObserver<?>> activeCall = new AtomicReference<>();
+    private final AtomicReference<Future<?>> scheduledTask = new AtomicReference<>();
 
     /**
      * Stops the stream and cancels any pending reconnection attempts.
      */
     public void stop() {
         stopped.set(true);
+        Future<?> task = scheduledTask.getAndSet(null);
+        if (task != null) {
+            task.cancel(false);
+        }
         cancelActiveCall("stream stopped by client");
     }
 
@@ -46,6 +52,20 @@ public class StreamHandle implements AutoCloseable {
         activeCall.set(call);
         if (stopped.get()) {
             cancelActiveCall("stream stopped before start");
+        }
+    }
+
+    /** SDK-internal. Tracks the watchdog or reconnect timer so stop() cancels it immediately. */
+    public void bindScheduledTask(Future<?> task) {
+        Future<?> previous = scheduledTask.getAndSet(task);
+        if (previous != null && previous != task) {
+            previous.cancel(false);
+        }
+        if (stopped.get()) {
+            Future<?> current = scheduledTask.getAndSet(null);
+            if (current != null) {
+                current.cancel(false);
+            }
         }
     }
 

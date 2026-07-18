@@ -9,8 +9,11 @@ public interface LiveData {
 
     /**
      * Starts streaming telemetry data with automatic reconnection on failure.
-     * Reconnects up to {@code maxRetryAttempts} times with exponential backoff.
-     * Use the returned {@link StreamHandle} to stop the stream and cancel reconnection.
+     * Temporary transport failures are recovered indefinitely with capped exponential backoff
+     * and jitter. Use the returned {@link StreamHandle} to stop the stream and cancel reconnection.
+     * The error callback is reserved for non-retryable request/authentication errors and failures
+     * raised by the consumer callback. Delivery is best-effort under local overload: stream items
+     * are not buffered and are dropped when the previous callback or all stream workers are busy.
      */
     StreamHandle streamTelemetryData(StreamTelemetryRequest request,
                                      Consumer<StreamTelemetryResponse> onData,
@@ -23,7 +26,12 @@ public interface LiveData {
     StreamHandle streamTelemetryData(StreamTelemetryRequest request,
                                      Consumer<StreamTelemetryResponse> onData);
 
-    StreamHandle streamNotifications(StreamNotificationRequest request, Consumer<StreamNotificationResponse> onData,
+    /**
+     * Starts a long-lived notification stream with the same SDK-managed recovery semantics as
+     * {@link #streamTelemetryData(StreamTelemetryRequest, Consumer, Consumer)}.
+     */
+    StreamHandle streamNotifications(StreamNotificationRequest request,
+                                     Consumer<StreamNotificationResponse> onData,
                                      Consumer<Throwable> onError);
 
     CompletableFuture<LiveDataResponse> startLiveStream(LiveDataStartLiveStreamRequest request);
