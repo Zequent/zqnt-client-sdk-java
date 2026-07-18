@@ -11,6 +11,7 @@ import com.zqnt.utils.livedata.proto.LiveDataStreamNotificationsRequest;
 import com.zqnt.utils.livedata.proto.LiveDataStreamTelemetryRequest;
 import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
 import io.grpc.ManagedChannel;
+import io.grpc.Status;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
@@ -235,11 +236,14 @@ public class LiveDataImpl implements LiveData {
                 ScheduledFuture<?> check = periodicCheckRef.get();
                 if (check != null) check.cancel(false);
 
-                resilience.recordFailure(error);
-
-                if (handle.isStopped()) {
+                // A client-initiated cancel (stop() or inactivity reconnect) is not a real failure:
+                // don't charge it to the circuit breaker and don't reconnect.
+                if (handle.isStopped()
+                        || Status.fromThrowable(error).getCode() == Status.Code.CANCELLED) {
                     return;
                 }
+
+                resilience.recordFailure(error);
 
                 int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
 
@@ -470,11 +474,14 @@ public class LiveDataImpl implements LiveData {
                 ScheduledFuture<?> check = periodicCheckRef.get();
                 if (check != null) check.cancel(false);
 
-                resilience.recordFailure(error);
-
-                if (handle.isStopped()) {
+                // A client-initiated cancel (stop() or inactivity reconnect) is not a real failure:
+                // don't charge it to the circuit breaker and don't reconnect.
+                if (handle.isStopped()
+                        || Status.fromThrowable(error).getCode() == Status.Code.CANCELLED) {
                     return;
                 }
+
+                resilience.recordFailure(error);
 
                 // If data was received, treat disconnect as a blip and reset attempt counter
                 int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
