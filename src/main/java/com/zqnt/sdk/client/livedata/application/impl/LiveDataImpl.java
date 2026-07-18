@@ -264,10 +264,39 @@ public class LiveDataImpl implements LiveData {
 
             @Override
             public void onCompleted() {
-                streamEnded.set(true);
+                // Server closed the stream. For a long-lived notification stream this is unexpected,
+                // so reconnect — unless a concurrent onError/inactivity-check already claimed the end.
+                if (!streamEnded.compareAndSet(false, true)) {
+                    return;
+                }
                 ScheduledFuture<?> check = periodicCheckRef.get();
                 if (check != null) check.cancel(false);
-                log.debug("Notification stream completed");
+
+                if (handle.isStopped()) {
+                    return;
+                }
+
+                // If data was received, treat completion as a blip and reset the attempt counter
+                int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
+
+                if (nextAttempt > maxAttempts) {
+                    String msg = "Notification stream completed without data after " + reconnectAttempt + " reconnect attempts, giving up";
+                    log.error(msg);
+                    if (onError != null) {
+                        onError.accept(new TimeoutException(msg));
+                    }
+                    return;
+                }
+
+                long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+                log.info("Notification stream completed, reconnecting (attempt {}/{}) in {}ms",
+                        nextAttempt, maxAttempts, delay);
+
+                timeoutScheduler.schedule(() -> {
+                    if (!handle.isStopped()) {
+                        startNotificationStream(request, onData, onError, handle, nextAttempt);
+                    }
+                }, delay, MILLISECONDS);
             }
         };
 
@@ -471,10 +500,39 @@ public class LiveDataImpl implements LiveData {
 
             @Override
             public void onCompleted() {
-                streamEnded.set(true);
+                // Server closed the stream. For a long-lived telemetry stream this is unexpected,
+                // so reconnect — unless a concurrent onError/inactivity-check already claimed the end.
+                if (!streamEnded.compareAndSet(false, true)) {
+                    return;
+                }
                 ScheduledFuture<?> check = periodicCheckRef.get();
                 if (check != null) check.cancel(false);
-                log.debug("Stream completed");
+
+                if (handle.isStopped()) {
+                    return;
+                }
+
+                // If data was received, treat completion as a blip and reset the attempt counter
+                int nextAttempt = dataReceived.get() ? 0 : reconnectAttempt + 1;
+
+                if (nextAttempt > maxAttempts) {
+                    String msg = "Stream completed without data after " + reconnectAttempt + " reconnect attempts, giving up";
+                    log.error(msg);
+                    if (onError != null) {
+                        onError.accept(new TimeoutException(msg));
+                    }
+                    return;
+                }
+
+                long delay = Math.min(baseDelayMillis * (nextAttempt + 1), maxDelayMillis);
+                log.info("Telemetry stream completed, reconnecting (attempt {}/{}) in {}ms",
+                        nextAttempt, maxAttempts, delay);
+
+                timeoutScheduler.schedule(() -> {
+                    if (!handle.isStopped()) {
+                        startTelemetryStream(request, onData, onError, handle, nextAttempt);
+                    }
+                }, delay, MILLISECONDS);
             }
         };
 
