@@ -99,6 +99,18 @@ class LiveDataImplTest {
         assertEquals(1, maximumActive.get());
     }
 
+    @Test
+    void completingConsumerCallbackDoesNotFakeTransportActivity() throws Exception {
+        LiveDataImpl.StreamSubscriptionState state = new LiveDataImpl.StreamSubscriptionState();
+        state.markReceived();
+        assertTrue(state.tryBeginCallback());
+
+        Thread.sleep(20);
+        state.endCallback();
+
+        assertTrue(state.nanosSinceLastActivity() >= java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(10));
+    }
+
     private void assertDelayInRange(int attempt, long minimum, long maximum) {
         for (int i = 0; i < 100; i++) {
             long delay = LiveDataImpl.reconnectDelayMillis(attempt, 1_000, 3);

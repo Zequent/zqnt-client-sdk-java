@@ -149,6 +149,7 @@ public class ZequentClient implements AutoCloseable {
         private int connectionTimeoutSeconds = 30;
         private int requestTimeoutSeconds = 60;
         private int streamInactivityTimeoutSeconds = 5 * 60;
+        private int telemetryHeartbeatTimeoutSeconds = 35;
         private int liveDataSchedulerThreads = 2;
         private ServiceConfig.LoadBalancerType defaultLoadBalancerType = ServiceConfig.LoadBalancerType.ROUND_ROBIN;
 
@@ -189,6 +190,11 @@ public class ZequentClient implements AutoCloseable {
 
         public ZequentClientBuilder streamInactivityTimeoutSeconds(int timeout) {
             this.streamInactivityTimeoutSeconds = timeout;
+            return this;
+        }
+
+        public ZequentClientBuilder telemetryHeartbeatTimeoutSeconds(int timeout) {
+            this.telemetryHeartbeatTimeoutSeconds = timeout;
             return this;
         }
 
@@ -235,6 +241,7 @@ public class ZequentClient implements AutoCloseable {
                     .connectionTimeoutSeconds(connectionTimeoutSeconds)
                     .requestTimeoutSeconds(requestTimeoutSeconds)
                     .streamInactivityTimeoutSeconds(streamInactivityTimeoutSeconds)
+                    .telemetryHeartbeatTimeoutSeconds(telemetryHeartbeatTimeoutSeconds)
                     .liveDataSchedulerThreads(liveDataSchedulerThreads)
                     .defaultLoadBalancerType(defaultLoadBalancerType)
                     .build();

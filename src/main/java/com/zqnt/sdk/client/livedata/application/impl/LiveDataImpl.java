@@ -141,6 +141,7 @@ public class LiveDataImpl implements LiveData {
         }
 
         startStream("telemetry", protoRequest, onData, onError, handle, new StreamSubscriptionState(), 0,
+                config.getTelemetryHeartbeatTimeoutSeconds(),
                 asyncStub::streamTelemetry, liveDataMapper::fromProtoResponse);
         return handle;
     }
@@ -152,6 +153,7 @@ public class LiveDataImpl implements LiveData {
         StreamHandle handle = new StreamHandle();
         var protoRequest = liveDataMapper.toProtoStreamNotificationsRequest(request);
         startStream("notification", protoRequest, onData, onError, handle, new StreamSubscriptionState(), 0,
+                config.getStreamInactivityTimeoutSeconds(),
                 asyncStub::streamNotifications, liveDataMapper::fromProtoNotificationResponse);
         return handle;
     }
@@ -176,13 +178,15 @@ public class LiveDataImpl implements LiveData {
             StreamHandle handle,
             StreamSubscriptionState subscriptionState,
             int reconnectAttempt,
+            int configuredInactivityTimeoutSeconds,
             BiConsumer<RequestT, StreamObserver<ProtoResponseT>> streamStarter,
             Function<ProtoResponseT, ResponseT> responseMapper) {
         if (handle.isStopped() || timeoutScheduler.isShutdown()) {
             return;
         }
 
-        int inactivityTimeoutSeconds = Math.max(1, config.getStreamInactivityTimeoutSeconds());
+        subscriptionState.markConnectionStarted();
+        int inactivityTimeoutSeconds = Math.max(1, configuredInactivityTimeoutSeconds);
         long inactivityTimeoutNanos = TimeUnit.SECONDS.toNanos(inactivityTimeoutSeconds);
         long checkIntervalMillis = Math.max(1_000L, TimeUnit.SECONDS.toMillis(inactivityTimeoutSeconds) / 6L);
         AtomicBoolean streamEnded = new AtomicBoolean(false);
@@ -200,7 +204,7 @@ public class LiveDataImpl implements LiveData {
             int nextAttempt = dataReceived.get() ? 1 : Math.min(31, reconnectAttempt + 1);
             scheduleReconnect(streamName, handle, nextAttempt,
                     () -> startStream(streamName, request, onData, onError, handle, subscriptionState, nextAttempt,
-                            streamStarter, responseMapper));
+                            configuredInactivityTimeoutSeconds, streamStarter, responseMapper));
         };
 
         ClientResponseObserver<RequestT, ProtoResponseT> observer = new ClientResponseObserver<>() {
@@ -215,6 +219,8 @@ public class LiveDataImpl implements LiveData {
                     return;
                 }
                 dataReceived.set(true);
+                // Every inbound frame proves that the subscription is alive. In particular,
+                // telemetry heartbeats keep an offline/no-data asset from triggering reconnects.
                 subscriptionState.markReceived();
                 // No store-and-forward: keep at most one in-flight callback per stream.
                 if (!subscriptionState.tryBeginCallback()) {
@@ -223,6 +229,9 @@ public class LiveDataImpl implements LiveData {
                 try {
                     streamExecutor.execute(() -> {
                         try {
+                            if (handle.isStopped()) {
+                                return;
+                            }
                             onData.accept(responseMapper.apply(protoResponse));
                         } catch (Exception error) {
                             log.error("Error processing {} stream item: {}", streamName, error.getMessage(), error);
@@ -261,10 +270,7 @@ public class LiveDataImpl implements LiveData {
                     return;
                 }
                 cancelWatchdog.run();
-                if (!handle.isStopped()) {
-                    log.info("{} stream completed; SDK will reconnect", streamName);
-                    reconnect.run();
-                }
+                log.info("{} stream completed", streamName);
             }
         };
 
@@ -272,7 +278,6 @@ public class LiveDataImpl implements LiveData {
         try {
             watchdog = timeoutScheduler.scheduleAtFixedRate(() -> {
                 if (streamEnded.get() || handle.isStopped()
-                        || subscriptionState.isProcessingCallback()
                         || subscriptionState.nanosSinceLastActivity() < inactivityTimeoutNanos
                         || !streamEnded.compareAndSet(false, true)) {
                     return;
@@ -363,17 +368,16 @@ public class LiveDataImpl implements LiveData {
             lastActivityNanos.set(System.nanoTime());
         }
 
+        void markConnectionStarted() {
+            lastActivityNanos.set(System.nanoTime());
+        }
+
         boolean tryBeginCallback() {
             return processingCallback.compareAndSet(false, true);
         }
 
         void endCallback() {
-            lastActivityNanos.set(System.nanoTime());
             processingCallback.set(false);
-        }
-
-        boolean isProcessingCallback() {
-            return processingCallback.get();
         }
 
         long nanosSinceLastActivity() {

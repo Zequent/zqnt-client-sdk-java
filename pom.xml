@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.zqnt.sdk</groupId>
     <artifactId>client-java-sdk</artifactId>
-    <version>1.2.1-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <name>Zequent Java Client SDK</name>
     <description>A framework-agnostic Java client SDK for Zequent's gRPC services, designed for easy integration with any Java application.</description>
     <url>https://github.com/zequent/zqnt-client-sdk-java</url>
@@ -37,7 +37,7 @@
         <maven.compiler.release>21</maven.compiler.release>
         <compiler-plugin.version>3.12.1</compiler-plugin.version>
         <surefire-plugin.version>3.2.5</surefire-plugin.version>
-        <mapstruct.version>1.6.3</mapstruct.version>
+        <grpc.version>1.76.0</grpc.version>
     </properties>
 
     <!-- GitHub Packages Repository -->
@@ -70,22 +70,21 @@
             <version>4.0.1</version>
             <scope>provided</scope>
         </dependency>
-
         <!-- gRPC - Pure Java, no framework dependencies -->
         <dependency>
             <groupId>io.grpc</groupId>
-            <artifactId>grpc-netty</artifactId>
-            <version>1.62.2</version>
+            <artifactId>grpc-netty-shaded</artifactId>
+            <version>${grpc.version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-protobuf</artifactId>
-            <version>1.62.2</version>
+            <version>${grpc.version}</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
-            <version>1.62.2</version>
+            <version>${grpc.version}</version>
         </dependency>
 
         <!-- Stork for service discovery (optional, framework-agnostic) -->
@@ -116,23 +115,11 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- SmallRye Mutiny (framework-agnostic reactive streams for gRPC) -->
-        <dependency>
-            <groupId>io.smallrye.reactive</groupId>
-            <artifactId>mutiny</artifactId>
-            <version>2.6.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.smallrye.reactive</groupId>
-            <artifactId>mutiny-zero</artifactId>
-            <version>1.1.1</version>
-        </dependency>
-
         <!-- Zequent Framework Utils (internal dependency - optional for public) -->
         <dependency>
             <groupId>com.zqnt</groupId>
             <artifactId>zqnt-utils-java</artifactId>
-            <version>1.2.5</version>
+            <version>1.2.6</version>
         </dependency>
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
@@ -140,28 +127,6 @@
             <artifactId>junit-jupiter</artifactId>
             <version>5.10.2</version>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>5.11.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-junit-jupiter</artifactId>
-            <version>5.11.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
-            <version>${mapstruct.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok-mapstruct-binding</artifactId>
-            <version>0.2.0</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
@@ -218,16 +183,6 @@
                             <artifactId>lombok</artifactId>
                             <version>1.18.42</version>
 
-                        </path>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok-mapstruct-binding</artifactId>
-                            <version>0.2.0</version>
-                        </path>
-                        <path>
-                            <groupId>org.mapstruct</groupId>
-                            <artifactId>mapstruct-processor</artifactId>
-                            <version>${mapstruct.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

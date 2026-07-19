@@ -105,6 +105,9 @@ public interface ZequentClientProperties {
         @WithDefault("300")
         int streamInactivityTimeoutSeconds();
 
+        @WithDefault("35")
+        int telemetryHeartbeatTimeoutSeconds();
+
         @WithDefault("2")
         int liveDataSchedulerThreads();
     }
