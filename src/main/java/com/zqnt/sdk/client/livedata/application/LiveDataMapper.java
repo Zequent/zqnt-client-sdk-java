@@ -85,15 +85,37 @@ public class LiveDataMapper {
         switch (protoResponse.getTelemetryCase()) {
             case ASSET_TELEMETRY:
                 response.setAssetTelemetry(mapAssetTelemetry(protoResponse.getAssetTelemetry()));
+                response.setEventType(StreamTelemetryResponse.StreamEventType.TELEMETRY);
                 break;
             case SUB_ASSET_TELEMETRY:
                 response.setSubAssetTelemetry(mapSubAssetTelemetry(protoResponse.getSubAssetTelemetry()));
+                response.setEventType(StreamTelemetryResponse.StreamEventType.TELEMETRY);
                 break;
             case ERROR:
                 response.setError(mapErrorInfo(protoResponse.getError()));
+                response.setEventType(StreamTelemetryResponse.StreamEventType.ERROR);
                 break;
+            case STREAM_HEARTBEAT:
+                response.setStreamHeartbeat(StreamTelemetryResponse.StreamHeartbeat.builder()
+                        .timestamp(timestampToInstant(protoResponse.getStreamHeartbeat().getTimestamp()))
+                        .build());
+                response.setEventType(StreamTelemetryResponse.StreamEventType.HEARTBEAT);
+                break;
+            case SOURCE_STATUS:
+                var protoStatus = protoResponse.getSourceStatus();
+                response.setSourceStatus(StreamTelemetryResponse.SourceStatus.builder()
+                        .sn(protoStatus.getSn())
+                        .state(protoStatus.getState())
+                        .observedAt(timestampToInstant(protoStatus.getObservedAt()))
+                        .lastTelemetryAt(protoStatus.hasLastTelemetryAt()
+                                ? timestampToInstant(protoStatus.getLastTelemetryAt())
+                                : null)
+                        .build());
+                response.setEventType(StreamTelemetryResponse.StreamEventType.SOURCE_STATUS);
+                break;
+            case LIVE_STREAM_STATE:
             case TELEMETRY_NOT_SET:
-                // No telemetry set
+                response.setEventType(StreamTelemetryResponse.StreamEventType.UNKNOWN);
                 break;
         }
 

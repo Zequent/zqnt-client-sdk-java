@@ -93,6 +93,8 @@ class ZequentClientTest {
 		assertEquals(1000, client.getConfig().getRetryDelayMillis());
 		assertEquals(10, client.getConfig().getConnectionTimeoutSeconds());
 		assertEquals(30, client.getConfig().getRequestTimeoutSeconds());
+		assertEquals(300, client.getConfig().getStreamInactivityTimeoutSeconds());
+		assertEquals(2, client.getConfig().getLiveDataSchedulerThreads());
 	}
 
 	@Test

@@ -36,6 +36,17 @@ public class GrpcClientConfig {
     @Builder.Default
     private int requestTimeoutSeconds = 60;
 
+    // Long-lived LiveData stream configuration
+    @Builder.Default
+    private int streamInactivityTimeoutSeconds = 5 * 60;
+
+    /** Allows roughly three missed 10-second application heartbeats before reconnecting telemetry. */
+    @Builder.Default
+    private int telemetryHeartbeatTimeoutSeconds = 35;
+
+    @Builder.Default
+    private int liveDataSchedulerThreads = 2;
+
     // Default load balancer for all services
     @Builder.Default
     private ServiceConfig.LoadBalancerType defaultLoadBalancerType = ServiceConfig.LoadBalancerType.ROUND_ROBIN;
