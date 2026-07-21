@@ -339,7 +339,12 @@ public class LiveDataImpl implements LiveData {
     }
 
     private boolean isRetryableStreamError(Throwable error) {
-        Status.Code code = Status.fromThrowable(error).getCode();
+        Status status = Status.fromThrowable(error);
+        Status.Code code = status.getCode();
+        if (code == Status.Code.PERMISSION_DENIED) {
+            String description = status.getDescription();
+            return description != null && description.startsWith("License ");
+        }
         return switch (code) {
             case CANCELLED, UNKNOWN, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED,
                     ABORTED, INTERNAL, UNAVAILABLE -> true;

@@ -12,6 +12,7 @@ import com.zqnt.sdk.client.remotecontrol.application.impl.RemoteControlImpl;
 
 import io.grpc.ManagedChannel;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Disposes;
 import jakarta.enterprise.inject.Produces;
 import lombok.extern.slf4j.Slf4j;
 
@@ -61,5 +62,11 @@ public class ZequentClientProducer {
 
         // Create and return ZequentClient
         return new ZequentClient(config, remoteControl, missionAutonomy, liveData, channels);
+    }
+
+    public void disposeZequentClient(@Disposes ZequentClient client) {
+        if (client != null) {
+            client.close();
+        }
     }
 }
