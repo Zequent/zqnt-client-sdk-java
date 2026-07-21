@@ -119,7 +119,7 @@
         <dependency>
             <groupId>com.zqnt</groupId>
             <artifactId>zqnt-utils-java</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <version>1.0.0-PR5-40c4e34-SNAPSHOT</version>
         </dependency>
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
