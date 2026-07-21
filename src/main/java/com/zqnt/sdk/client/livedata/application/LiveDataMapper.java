@@ -3,7 +3,6 @@ package com.zqnt.sdk.client.livedata.application;
 import com.google.protobuf.Timestamp;
 import com.zqnt.sdk.client.livedata.domains.ChangeLensRequest;
 import com.zqnt.sdk.client.livedata.domains.ChangeZoomRequest;
-import com.zqnt.sdk.client.livedata.domains.LiveDataResponse;
 import com.zqnt.sdk.client.livedata.domains.LiveDataStartLiveStreamRequest;
 import com.zqnt.sdk.client.livedata.domains.LiveDataStopLiveStreamRequest;
 import com.zqnt.sdk.client.livedata.domains.StreamNotificationRequest;
@@ -485,67 +484,6 @@ public class LiveDataMapper {
                 .setRequest(requestBuilder.build())
                 .build();
     }
-
-    /**
-     * Maps proto LiveDataResponse to POJO
-     */
-    public LiveDataResponse fromProtoLiveDataResponse(
-            com.zqnt.utils.livedata.proto.LiveDataResponse protoResponse) {
-        if (protoResponse == null) {
-            return null;
-        }
-
-        return LiveDataResponse.builder()
-                .tid(protoResponse.getTid())
-                .timestamp(timestampToLocalDateTime(protoResponse.getTimestamp()))
-                .hasErrors(protoResponse.getHasErrors())
-                .sn(protoResponse.getSn())
-                .assetId(nullable(protoResponse.hasAssetId(), protoResponse.getAssetId()))
-                .responseMessage(nullable(protoResponse.hasResponseMessage(), protoResponse.getResponseMessage()))
-                .build();
-    }
-
-    /**
-     * Maps proto CommandResponse to LiveDataResponse POJO
-     */
-    public LiveDataResponse fromProtoCommandResponse(com.zqnt.utils.common.proto.CommandResponse protoResponse) {
-        if (protoResponse == null) {
-            return null;
-        }
-
-        var meta = protoResponse.hasMeta() ? protoResponse.getMeta() : null;
-        var response = LiveDataResponse.builder()
-                .tid(meta != null ? meta.getTid() : null)
-                .timestamp(meta != null && meta.hasTimestamp() ? timestampToLocalDateTime(meta.getTimestamp()) : null)
-                .hasErrors(protoResponse.getHasErrors())
-                .sn(meta != null ? meta.getSn() : null)
-                .assetId(meta != null ? nullable(meta.hasAssetId(), meta.getAssetId()) : null)
-                .responseMessage(meta != null ? nullable(meta.hasResponseMessage(), meta.getResponseMessage()) : null)
-                .build();
-
-        switch (protoResponse.getResponseCase()) {
-            case ERROR:
-                response.setErrorMessage(LiveDataResponse.ErrorDetail.builder()
-                        .errorCode(protoResponse.getError().getErrorCode().name())
-                        .errorMessage(protoResponse.getError().getErrorMessage())
-                        .timestamp(timestampToLocalDateTime(protoResponse.getError().getTimestamp()))
-                        .build());
-                break;
-            case LIVE_STREAM_START_RESPONSE:
-                response.setLiveStreamStartResponse(LiveDataResponse.LiveStreamStartDetail.builder()
-                        .streamUrl(protoResponse.getLiveStreamStartResponse().getStreamUrl())
-                        .videoId(protoResponse.getLiveStreamStartResponse().getVideoId())
-                        .build());
-                break;
-            case PROGRESS:
-            case EMPTY:
-            case RESPONSE_NOT_SET:
-                break;
-        }
-
-        return response;
-    }
-
 
     public com.zqnt.utils.common.proto.ChangeCameraLensCommandRequest toProtoChangeLensRequest(ChangeLensRequest request) {
         return com.zqnt.utils.common.proto.ChangeCameraLensCommandRequest.newBuilder()

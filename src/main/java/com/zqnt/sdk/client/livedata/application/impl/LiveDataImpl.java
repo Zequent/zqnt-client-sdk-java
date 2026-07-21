@@ -5,10 +5,8 @@ import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.livedata.application.LiveDataMapper;
 import com.zqnt.sdk.client.livedata.domains.*;
+import com.zqnt.utils.common.proto.CommandResponse;
 import com.zqnt.utils.livedata.proto.LiveDataServiceGrpc;
-import com.zqnt.utils.livedata.proto.LiveDataNotificationResponse;
-import com.zqnt.utils.livedata.proto.LiveDataStreamNotificationsRequest;
-import com.zqnt.utils.livedata.proto.LiveDataStreamTelemetryRequest;
 import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
@@ -393,14 +391,14 @@ public class LiveDataImpl implements LiveData {
      * @return CompletableFuture with the response
      */
     @Override
-    public CompletableFuture<LiveDataResponse> startLiveStream(LiveDataStartLiveStreamRequest request) {
+    public CompletableFuture<CommandResponse> startLiveStream(LiveDataStartLiveStreamRequest request) {
         log.info("Starting live stream for SN: {}, videoId: {}", request.getSn(), request.getVideoId());
 
         var protoRequest = liveDataMapper.toProtoStartLiveStreamRequest(request);
         int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
         return resilience.executeWithResilienceAsync(() -> {
-            CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+            CompletableFuture<CommandResponse> future = new CompletableFuture<>();
 
             // Convert ListenableFuture to CompletableFuture with timeout
             var listenableFuture = futureStub.startLiveStream(protoRequest);
@@ -413,9 +411,9 @@ public class LiveDataImpl implements LiveData {
             com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
                     new com.google.common.util.concurrent.FutureCallback<>() {
                         @Override
-                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                        public void onSuccess(CommandResponse result) {
                             timeoutTask.cancel(false);
-                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                            future.complete(result);
                         }
 
                         @Override
@@ -438,14 +436,14 @@ public class LiveDataImpl implements LiveData {
      * @return CompletableFuture with the response
      */
     @Override
-    public CompletableFuture<LiveDataResponse> stopLiveStream(LiveDataStopLiveStreamRequest request) {
+    public CompletableFuture<CommandResponse> stopLiveStream(LiveDataStopLiveStreamRequest request) {
         log.info("Stopping live stream for SN: {}, videoId: {}", request.getSn(), request.getVideoId());
 
         var protoRequest = liveDataMapper.toProtoStopLiveStreamRequest(request);
         int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
         return resilience.executeWithResilienceAsync(() -> {
-            CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+            CompletableFuture<CommandResponse> future = new CompletableFuture<>();
 
             var listenableFuture = futureStub.stopLiveStream(protoRequest);
 
@@ -456,9 +454,9 @@ public class LiveDataImpl implements LiveData {
             com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
                     new com.google.common.util.concurrent.FutureCallback<>() {
                         @Override
-                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                        public void onSuccess(CommandResponse result) {
                             timeoutTask.cancel(false);
-                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                            future.complete(result);
                         }
 
                         @Override
@@ -475,14 +473,14 @@ public class LiveDataImpl implements LiveData {
     }
 
     @Override
-    public CompletableFuture<LiveDataResponse> changeCameraLens(ChangeLensRequest request) {
+    public CompletableFuture<CommandResponse> changeCameraLens(ChangeLensRequest request) {
         log.info("Changing camera lens for SN: {}", request.getSn());
 
         var protoRequest = liveDataMapper.toProtoChangeLensRequest(request);
         int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
         return resilience.executeWithResilienceAsync(() -> {
-            CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+            CompletableFuture<CommandResponse> future = new CompletableFuture<>();
 
             var listenableFuture = futureStub.changeLens(protoRequest);
 
@@ -493,9 +491,9 @@ public class LiveDataImpl implements LiveData {
             com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
                     new com.google.common.util.concurrent.FutureCallback<>() {
                         @Override
-                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                        public void onSuccess(CommandResponse result) {
                             timeoutTask.cancel(false);
-                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                            future.complete(result);
                         }
 
                         @Override
@@ -512,14 +510,14 @@ public class LiveDataImpl implements LiveData {
     }
 
     @Override
-    public CompletableFuture<LiveDataResponse> changeCameraZoom(ChangeZoomRequest request) {
+    public CompletableFuture<CommandResponse> changeCameraZoom(ChangeZoomRequest request) {
         log.info("Changing camera zoom for SN: {}", request.getSn());
 
         var protoRequest = liveDataMapper.toProtoChangeZoomRequest(request);
         int timeout = config != null ? config.getRequestTimeoutSeconds() : 30;
 
         return resilience.executeWithResilienceAsync(() -> {
-            CompletableFuture<LiveDataResponse> future = new CompletableFuture<>();
+            CompletableFuture<CommandResponse> future = new CompletableFuture<>();
 
             var listenableFuture = futureStub.changeZoom(protoRequest);
 
@@ -530,9 +528,9 @@ public class LiveDataImpl implements LiveData {
             com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
                     new com.google.common.util.concurrent.FutureCallback<>() {
                         @Override
-                        public void onSuccess(com.zqnt.utils.livedata.proto.LiveDataResponse result) {
+                        public void onSuccess(CommandResponse result) {
                             timeoutTask.cancel(false);
-                            future.complete(liveDataMapper.fromProtoLiveDataResponse(result));
+                            future.complete(result);
                         }
 
                         @Override

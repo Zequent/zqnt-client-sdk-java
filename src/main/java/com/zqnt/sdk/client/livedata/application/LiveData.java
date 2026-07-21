@@ -1,6 +1,7 @@
 package com.zqnt.sdk.client.livedata.application;
 
 import com.zqnt.sdk.client.livedata.domains.*;
+import com.zqnt.utils.common.proto.CommandResponse;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -36,12 +37,12 @@ public interface LiveData {
                                      Consumer<StreamNotificationResponse> onData,
                                      Consumer<Throwable> onError);
 
-    CompletableFuture<LiveDataResponse> startLiveStream(LiveDataStartLiveStreamRequest request);
+    CompletableFuture<CommandResponse> startLiveStream(LiveDataStartLiveStreamRequest request);
 
-    CompletableFuture<LiveDataResponse> stopLiveStream(LiveDataStopLiveStreamRequest request);
+    CompletableFuture<CommandResponse> stopLiveStream(LiveDataStopLiveStreamRequest request);
 
 
-    CompletableFuture<LiveDataResponse> changeCameraLens(ChangeLensRequest request);
+    CompletableFuture<CommandResponse> changeCameraLens(ChangeLensRequest request);
 
-    CompletableFuture<LiveDataResponse> changeCameraZoom(ChangeZoomRequest request);
+    CompletableFuture<CommandResponse> changeCameraZoom(ChangeZoomRequest request);
 }
