@@ -38,7 +38,24 @@
         <compiler-plugin.version>3.12.1</compiler-plugin.version>
         <surefire-plugin.version>3.2.5</surefire-plugin.version>
         <grpc.version>1.76.0</grpc.version>
+        <protobuf.version>3.25.9</protobuf.version>
+        <guava.version>33.4.8-android</guava.version>
+        <slf4j.version>2.0.16</slf4j.version>
+        <jackson3.version>3.1.5</jackson3.version>
+        <proguard.version>7.9.1</proguard.version>
+        <proguard-core.version>9.3.2</proguard-core.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Fixes CVE-2026-59889 pulled in by the optional Stork Kubernetes provider. -->
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson3.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <!-- GitHub Packages Repository -->
     <repositories>
@@ -73,6 +90,11 @@
         <!-- gRPC - Pure Java, no framework dependencies -->
         <dependency>
             <groupId>io.grpc</groupId>
+            <artifactId>grpc-api</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
             <artifactId>grpc-netty-shaded</artifactId>
             <version>${grpc.version}</version>
         </dependency>
@@ -86,24 +108,34 @@
             <artifactId>grpc-stub</artifactId>
             <version>${grpc.version}</version>
         </dependency>
+        <!-- APIs used directly by the SDK source code. -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${protobuf.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>${guava.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
 
         <!-- Stork for service discovery (optional, framework-agnostic) -->
         <dependency>
             <groupId>io.smallrye.stork</groupId>
             <artifactId>stork-core</artifactId>
-            <version>2.7.1</version>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>io.smallrye.stork</groupId>
-            <artifactId>stork-service-discovery-consul</artifactId>
-            <version>2.7.1</version>
+            <version>3.0.0</version>
             <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>io.smallrye.stork</groupId>
             <artifactId>stork-service-discovery-kubernetes</artifactId>
-            <version>2.7.1</version>
+            <version>3.0.0</version>
             <optional>true</optional>
         </dependency>
 
@@ -119,7 +151,7 @@
         <dependency>
             <groupId>com.zqnt</groupId>
             <artifactId>zqnt-utils-java</artifactId>
-            <version>1.0.0-PR5-bef7056-SNAPSHOT</version>
+            <version>1.0.0-PR5-4af20f0-SNAPSHOT</version>
         </dependency>
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
@@ -132,6 +164,7 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <version>1.18.42</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 
@@ -223,6 +256,7 @@
                 </executions>
 
                 <configuration>
+                    <proguardVersion>${proguard.version}</proguardVersion>
                     <injar>${project.build.finalName}.jar</injar>
                     <outjar>${project.build.finalName}.jar</outjar>
                     <libs>
@@ -232,6 +266,18 @@
                     <attachArtifactClassifier>obfuscated</attachArtifactClassifier>
                     <proguardInclude>${project.basedir}/proguard-rules.pro</proguardInclude>
                 </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.guardsquare</groupId>
+                        <artifactId>proguard-base</artifactId>
+                        <version>${proguard.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>com.guardsquare</groupId>
+                        <artifactId>proguard-core</artifactId>
+                        <version>${proguard-core.version}</version>
+                    </dependency>
+                </dependencies>
             </plugin>
 
             <!-- Attach original JAR with classifier -->
