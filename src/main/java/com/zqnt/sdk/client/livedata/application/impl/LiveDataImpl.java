@@ -5,10 +5,8 @@ import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.livedata.application.LiveDataMapper;
 import com.zqnt.sdk.client.livedata.domains.*;
-import com.zqnt.utils.livedata.proto.LiveDataServiceGrpc;
 import com.zqnt.utils.livedata.proto.LiveDataNotificationResponse;
-import com.zqnt.utils.livedata.proto.LiveDataStreamNotificationsRequest;
-import com.zqnt.utils.livedata.proto.LiveDataStreamTelemetryRequest;
+import com.zqnt.utils.livedata.proto.LiveDataServiceGrpc;
 import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
@@ -222,6 +220,12 @@ public class LiveDataImpl implements LiveData {
                 // Every inbound frame proves that the subscription is alive. In particular,
                 // telemetry heartbeats keep an offline/no-data asset from triggering reconnects.
                 subscriptionState.markReceived();
+                // Notification heartbeats are transport control frames. They reset the inactivity
+                // watchdog but must not reach application callbacks as domain notifications.
+                if (protoResponse instanceof LiveDataNotificationResponse notificationResponse
+                        && notificationResponse.hasStreamHeartbeat()) {
+                    return;
+                }
                 // No store-and-forward: keep at most one in-flight callback per stream.
                 if (!subscriptionState.tryBeginCallback()) {
                     return;

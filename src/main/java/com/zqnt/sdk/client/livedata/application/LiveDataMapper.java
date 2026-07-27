@@ -14,7 +14,6 @@ import com.zqnt.utils.livedata.proto.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.List;
 import java.util.UUID;
 
 public class LiveDataMapper {
@@ -149,6 +148,9 @@ public class LiveDataMapper {
             case TASK_EVENT -> response.setTaskEvent(mapTaskEvent(protoResponse.getTaskEvent()));
             case OPERATION_EVENT -> response.setOperationEvent(mapOperationEvent(protoResponse.getOperationEvent()));
             case ERROR -> response.setError(mapNotificationErrorInfo(protoResponse.getError()));
+            case STREAM_HEARTBEAT -> {
+                // Transport liveness is consumed internally by LiveDataImpl.
+            }
             case EVENT_NOT_SET -> {
                 // No event set
             }
@@ -404,7 +406,7 @@ public class LiveDataMapper {
             case ASSET_STATUS -> NotificationEventType.NOTIFICATION_EVENT_ASSET_STATUS;
             case TASK_EVENT -> NotificationEventType.NOTIFICATION_EVENT_TASK;
             case OPERATION_EVENT -> NotificationEventType.NOTIFICATION_EVENT_OPERATION;
-            case ERROR, EVENT_NOT_SET -> null;
+            case ERROR, STREAM_HEARTBEAT, EVENT_NOT_SET -> null;
         };
     }
 

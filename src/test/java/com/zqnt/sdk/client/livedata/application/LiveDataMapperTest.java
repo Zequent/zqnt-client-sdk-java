@@ -1,11 +1,9 @@
 package com.zqnt.sdk.client.livedata.application;
 
 import com.google.protobuf.Timestamp;
+import com.zqnt.sdk.client.livedata.domains.StreamNotificationResponse;
 import com.zqnt.sdk.client.livedata.domains.StreamTelemetryResponse;
-import com.zqnt.utils.livedata.proto.LiveDataStreamHeartbeat;
-import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
-import com.zqnt.utils.livedata.proto.TelemetrySourceState;
-import com.zqnt.utils.livedata.proto.TelemetrySourceStatus;
+import com.zqnt.utils.livedata.proto.*;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,5 +47,22 @@ class LiveDataMapperTest {
         assertEquals(StreamTelemetryResponse.StreamEventType.SOURCE_STATUS, mapped.getEventType());
         assertEquals(TelemetrySourceState.TELEMETRY_SOURCE_STATE_NO_DATA, mapped.getSourceStatus().getState());
         assertNull(mapped.getSourceStatus().getLastTelemetryAt());
+    }
+
+    @Test
+    void notificationHeartbeatDoesNotBecomeDomainNotification() {
+        LiveDataNotificationResponse proto = LiveDataNotificationResponse.newBuilder()
+                .setSn("*")
+                .setTimestamp(NOW)
+                .setStreamHeartbeat(LiveDataStreamHeartbeat.newBuilder().setTimestamp(NOW))
+                .build();
+
+        StreamNotificationResponse mapped = LiveDataMapper.INSTANCE.fromProtoNotificationResponse(proto);
+
+        assertNull(mapped.getEventType());
+        assertNull(mapped.getAssetStatus());
+        assertNull(mapped.getTaskEvent());
+        assertNull(mapped.getOperationEvent());
+        assertNull(mapped.getError());
     }
 }
