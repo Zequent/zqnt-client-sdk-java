@@ -37,6 +37,7 @@
         <maven.compiler.release>21</maven.compiler.release>
         <compiler-plugin.version>3.12.1</compiler-plugin.version>
         <surefire-plugin.version>3.2.5</surefire-plugin.version>
+        <test.excludedGroups>integration</test.excludedGroups>
         <grpc.version>1.76.0</grpc.version>
         <protobuf.version>3.25.9</protobuf.version>
         <guava.version>33.4.8-android</guava.version>
@@ -151,7 +152,7 @@
         <dependency>
             <groupId>com.zqnt</groupId>
             <artifactId>zqnt-utils-java</artifactId>
-            <version>1.0.0-PR5-4af20f0-SNAPSHOT</version>
+            <version>1.0.0-PR5-7cd87de-SNAPSHOT</version>
         </dependency>
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
@@ -225,6 +226,10 @@
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${surefire-plugin.version}</version>
+                <configuration>
+                    <!-- IntelliJ can run integration tests directly; regular Maven builds stay isolated. -->
+                    <excludedGroups>${test.excludedGroups}</excludedGroups>
+                </configuration>
             </plugin>
 
             <plugin>

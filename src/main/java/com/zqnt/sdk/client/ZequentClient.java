@@ -2,6 +2,8 @@ package com.zqnt.sdk.client;
 
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.config.ServiceConfig;
+import com.zqnt.sdk.client.connector.application.Connector;
+import com.zqnt.sdk.client.connector.application.impl.ConnectorImpl;
 import com.zqnt.sdk.client.grpc.ChannelFactory;
 import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.livedata.application.impl.LiveDataImpl;
@@ -32,6 +34,7 @@ public class ZequentClient implements AutoCloseable {
     private final RemoteControl remoteControl;
     private final MissionAutonomy missionAutonomy;
     private final LiveData liveData;
+    private final Connector connector;
     private final List<ManagedChannel> channels;
 
 
@@ -42,12 +45,13 @@ public class ZequentClient implements AutoCloseable {
      * Note: This constructor is called by ZequentClientProducer, NOT by CDI directly.
      */
     ZequentClient(GrpcClientConfig config, RemoteControl remoteControl,
-                  MissionAutonomy missionAutonomy, LiveData liveData,
+                  MissionAutonomy missionAutonomy, LiveData liveData, Connector connector,
                   List<ManagedChannel> channels) {
         this.config = config;
         this.remoteControl = remoteControl;
         this.missionAutonomy = missionAutonomy;
         this.liveData = liveData;
+        this.connector = connector;
         this.channels = channels;
         log.info("ZequentClient initialized with {} channels", channels.size());
     }
@@ -90,6 +94,11 @@ public class ZequentClient implements AutoCloseable {
         return liveData;
     }
 
+    /** Access all Connector service endpoints. */
+    public Connector connector() {
+        return connector;
+    }
+
     /**
      * Get the current configuration.
      */
@@ -118,6 +127,9 @@ public class ZequentClient implements AutoCloseable {
         }
         if (liveData instanceof LiveDataImpl) {
             ((LiveDataImpl) liveData).shutdown();
+        }
+        if (connector instanceof ConnectorImpl) {
+            ((ConnectorImpl) connector).shutdown();
         }
 
         // Then shutdown channels
@@ -157,6 +169,7 @@ public class ZequentClient implements AutoCloseable {
         private ServiceConfigBuilder remoteControlBuilder;
         private ServiceConfigBuilder missionAutonomyBuilder;
         private ServiceConfigBuilder liveDataBuilder;
+        private ServiceConfigBuilder connectorBuilder;
 
         public ZequentClientBuilder maxRetryAttempts(int maxRetryAttempts) {
             this.maxRetryAttempts = maxRetryAttempts;
@@ -223,17 +236,24 @@ public class ZequentClient implements AutoCloseable {
             return this.liveDataBuilder;
         }
 
+        public ServiceConfigBuilder connector() {
+            this.connectorBuilder = new ServiceConfigBuilder(this, "connector");
+            return this.connectorBuilder;
+        }
+
         public ZequentClient build() {
             // Build service configs with defaults
             ServiceConfig remoteControlConfig = buildServiceConfig(remoteControlBuilder, "remote-control", 9091);
             ServiceConfig missionAutonomyConfig = buildServiceConfig(missionAutonomyBuilder, "mission-autonomy", 9092);
             ServiceConfig liveDataConfig = buildServiceConfig(liveDataBuilder, "live-data", 9093);
+            ServiceConfig connectorConfig = buildServiceConfig(connectorBuilder, "connector", 8010);
 
             // Build global config
             GrpcClientConfig globalConfig = GrpcClientConfig.builder()
                     .remoteControlConfig(remoteControlConfig)
                     .missionAutonomyConfig(missionAutonomyConfig)
                     .liveDataConfig(liveDataConfig)
+                    .connectorConfig(connectorConfig)
                     .maxRetryAttempts(maxRetryAttempts)
                     .retryDelayMillis(retryDelayMillis)
                     .circuitBreakerFailureThreshold(circuitBreakerFailureThreshold)
@@ -251,16 +271,19 @@ public class ZequentClient implements AutoCloseable {
             ManagedChannel remoteControlChannel = ChannelFactory.createChannel(remoteControlConfig);
             ManagedChannel missionAutonomyChannel = ChannelFactory.createChannel(missionAutonomyConfig);
             ManagedChannel liveDataChannel = ChannelFactory.createChannel(liveDataConfig);
+            ManagedChannel connectorChannel = ChannelFactory.createChannel(connectorConfig);
             channels.add(remoteControlChannel);
             channels.add(missionAutonomyChannel);
             channels.add(liveDataChannel);
+            channels.add(connectorChannel);
 
             // Create service implementations with their own channels
             RemoteControl remoteControl = RemoteControlImpl.create(globalConfig, remoteControlChannel);
             MissionAutonomy missionAutonomy = MissionAutonomyImpl.create(globalConfig, missionAutonomyChannel);
             LiveData liveData = LiveDataImpl.create(globalConfig, liveDataChannel);
+            Connector connector = ConnectorImpl.create(globalConfig, connectorChannel);
 
-            return new ZequentClient(globalConfig, remoteControl, missionAutonomy, liveData, channels);
+            return new ZequentClient(globalConfig, remoteControl, missionAutonomy, liveData, connector, channels);
         }
 
         private ServiceConfig buildServiceConfig(ServiceConfigBuilder builder, String serviceName, int defaultPort) {
@@ -356,6 +379,7 @@ public class ZequentClient implements AutoCloseable {
                 case "remote-control" -> 8002;
                 case "mission-autonomy" -> 8004;
                 case "live-data" -> 8003;
+                case "connector" -> 8010;
                 default -> 9001;
             };
         }

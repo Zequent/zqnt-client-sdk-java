@@ -10,11 +10,12 @@ import com.zqnt.utils.JsonUtils;
 import com.zqnt.utils.common.proto.*;
 import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
-import com.zqnt.utils.mission.proto.*;
-import com.zqnt.utils.workflow.proto.*;
+import com.zqnt.utils.mission.proto.MissionAutonomyServiceGrpc;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
+import com.zqnt.utils.missionautonomy.domains.config.*;
+import com.zqnt.utils.workflow.proto.*;
 import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 
@@ -111,7 +112,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .thenApply(this::toMissionResponse);
     }
 
-    private static MissionProtoDTO.Builder mapMissionDtoToProto(MissionProtoDTO.Builder missionId, MissionDTO missionDTO) {
+    public static MissionProtoDTO.Builder mapMissionDtoToProto(MissionProtoDTO.Builder missionId, MissionDTO missionDTO) {
         var missionBuilder = missionId
                 .setName(missionDTO.getName() != null ? missionDTO.getName() : "")
                 .setDescription(missionDTO.getDescription() != null ? missionDTO.getDescription() : "");
@@ -139,6 +140,34 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
         if (missionDTO.getModifiedAt() != null) {
             missionBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(missionDTO.getModifiedAt()));
+        }
+        if (missionDTO.getModifiedFrom() != null) {
+            missionBuilder.setUpdatedUser(missionDTO.getModifiedFrom());
+        }
+        if (missionDTO.getMissionConfig() != null) {
+            missionBuilder.setMissionConfig((DynamicConfigProto) ProtoJsonUtils.fromJson(
+                    JsonUtils.toJson(missionDTO.getMissionConfig()), DynamicConfigProto.newBuilder()));
+        }
+        if (missionDTO.getAutonomyConfig() != null) {
+            missionBuilder.setAutonomyConfig((AutonomyConfigProto) ProtoJsonUtils.fromJson(
+                    JsonUtils.toJson(missionDTO.getAutonomyConfig()), AutonomyConfigProto.newBuilder()));
+        }
+        if (missionDTO.getExternalId() != null) {
+            missionBuilder.setExternalId(missionDTO.getExternalId());
+        }
+        if (missionDTO.getExternalMissionType() != null) {
+            missionBuilder.setExternalMissionType(missionDTO.getExternalMissionType());
+        }
+        if (missionDTO.getTasks() != null) {
+            missionBuilder.addAllTasks(missionDTO.getTasks().stream()
+                    .map(task -> mapTaskDtoToProto(TaskProtoDTO.newBuilder(), task).build())
+                    .toList());
+        }
+        if (missionDTO.getZones() != null) {
+            missionBuilder.addAllZones(missionDTO.getZones().stream()
+                    .map(zone -> (MissionZoneProtoDTO) ProtoJsonUtils.fromJson(
+                            JsonUtils.toJson(zone), MissionZoneProtoDTO.newBuilder()))
+                    .toList());
         }
         return missionBuilder;
     }
@@ -203,7 +232,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
 
-    private static TaskProtoDTO.Builder mapTaskDtoToProto(TaskProtoDTO.Builder taskId, TaskDTO taskDTO) {
+    public static TaskProtoDTO.Builder mapTaskDtoToProto(TaskProtoDTO.Builder taskId, TaskDTO taskDTO) {
         var taskProtoBuilder = taskId
                 .setName(taskDTO.getName() != null ? taskDTO.getName() : "")
                 .setSnNumber(taskDTO.getSnNumber() != null ? taskDTO.getSnNumber() : "")
@@ -218,9 +247,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (taskDTO.getTaskType() != null) {
             taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()));
         }
-        if (taskDTO.getConfig() != null) {
-            taskProtoBuilder.setConfig(JsonUtils.toJson(taskDTO.getConfig()));
-        }
+        mapTaskConfig(taskProtoBuilder, taskDTO);
         if (taskDTO.getStatus() != null) {
             taskProtoBuilder.setStatus(taskDTO.getStatus());
         }
@@ -237,7 +264,47 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (taskDTO.getBreakReason() != null) {
             taskProtoBuilder.setBreakReason(taskDTO.getBreakReason());
         }
+        if (taskDTO.getExternalTaskId() != null) {
+            taskProtoBuilder.setExternalTaskId(taskDTO.getExternalTaskId());
+        }
+        if (taskDTO.getTaskConfigTemplate() != null) {
+            taskProtoBuilder.setTaskConfigTemplate((DynamicConfigProto) ProtoJsonUtils.fromJson(
+                    JsonUtils.toJson(taskDTO.getTaskConfigTemplate()), DynamicConfigProto.newBuilder()));
+        }
+        if (taskDTO.getAutonomyConfig() != null) {
+            taskProtoBuilder.setAutonomyConfig((AutonomyConfigProto) ProtoJsonUtils.fromJson(
+                    JsonUtils.toJson(taskDTO.getAutonomyConfig()), AutonomyConfigProto.newBuilder()));
+        }
+        if (taskDTO.getExecutionOrder() != null) {
+            taskProtoBuilder.setExecutionOrder(taskDTO.getExecutionOrder());
+        }
+        if (taskDTO.getDecisionEngineEnabled() != null) {
+            taskProtoBuilder.setDecisionEngineEnabled(taskDTO.getDecisionEngineEnabled());
+        }
         return taskProtoBuilder;
+    }
+
+    private static void mapTaskConfig(TaskProtoDTO.Builder builder, TaskDTO taskDTO) {
+        var config = taskDTO.getConfig();
+        if (config == null) {
+            return;
+        }
+        String json = JsonUtils.toJson(config);
+        switch (config) {
+            case WaypointTaskConfig ignored -> builder.setWaypointConfig((WaypointTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, WaypointTaskConfigProto.newBuilder()));
+            case DetectTaskConfig ignored -> builder.setDetectConfig((DetectTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, DetectTaskConfigProto.newBuilder()));
+            case AreaMappingTaskConfig ignored -> builder.setAreaMappingConfig((AreaMappingTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, AreaMappingTaskConfigProto.newBuilder()));
+            case PoiTaskConfig ignored -> builder.setPoiConfig((PoiTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, PoiTaskConfigProto.newBuilder()));
+            case FollowTaskConfig ignored -> builder.setFollowConfig((FollowTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, FollowTaskConfigProto.newBuilder()));
+            case TrackTaskConfig ignored -> builder.setTrackConfig((TrackTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, TrackTaskConfigProto.newBuilder()));
+            default -> throw new IllegalArgumentException("Unsupported task config: " + config.getClass().getName());
+        }
     }
 
 
@@ -343,7 +410,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .thenApply(this::toSchedulerResponse);
     }
 
-    private static SchedulerProtoDTO.Builder mapSchedulerDtoToProto(SchedulerProtoDTO.Builder newBuilder, SchedulerDTO schedulerDTO) {
+    public static SchedulerProtoDTO.Builder mapSchedulerDtoToProto(SchedulerProtoDTO.Builder newBuilder, SchedulerDTO schedulerDTO) {
         var schedulerBuilder = newBuilder
                 .setName(schedulerDTO.getName() != null ? schedulerDTO.getName() : "")
                 .setCronExpression(schedulerDTO.getCronExpression() != null ? schedulerDTO.getCronExpression() : "")
@@ -360,6 +427,12 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
         if (schedulerDTO.getMissionId() != null) {
             schedulerBuilder.setMissionId(schedulerDTO.getMissionId().toString());
+        }
+        if (schedulerDTO.getCreatedAt() != null) {
+            schedulerBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(schedulerDTO.getCreatedAt()));
+        }
+        if (schedulerDTO.getModifiedAt() != null) {
+            schedulerBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(schedulerDTO.getModifiedAt()));
         }
 
         return schedulerBuilder;

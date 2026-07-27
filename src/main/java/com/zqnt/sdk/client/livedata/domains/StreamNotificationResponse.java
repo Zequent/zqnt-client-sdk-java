@@ -1,11 +1,7 @@
 package com.zqnt.sdk.client.livedata.domains;
 
-import com.zqnt.utils.common.proto.ErrorCode;
+import com.zqnt.utils.common.proto.*;
 import com.zqnt.utils.events.proto.NotificationEventType;
-import com.zqnt.utils.common.proto.MissionStatus;
-import com.zqnt.utils.common.proto.MissionType;
-import com.zqnt.utils.common.proto.TaskStatus;
-import com.zqnt.utils.common.proto.TaskTypeProto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,7 +24,7 @@ public class StreamNotificationResponse {
     private NotificationEventType eventType;
     private AssetStatusEvent assetStatus;
     private TaskEvent taskEvent;
-    private OperationEvent operationEvent;
+    private MissionEvent missionEvent;
     private ErrorInfo error;
 
     @Data
@@ -59,8 +55,8 @@ public class StreamNotificationResponse {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class OperationEvent {
-        private String operationId;
+    public static class MissionEvent {
+        private String missionId;
         private MissionType missionType;
         private MissionStatus status;
         private String message;

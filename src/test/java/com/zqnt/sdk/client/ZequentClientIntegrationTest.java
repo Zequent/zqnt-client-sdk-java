@@ -168,10 +168,10 @@ class ZequentClientIntegrationTest {
 				assertNotNull(response.getSn(), "SN should not be null");
 
 				// Check telemetry fields
-				if (response.getAssetTelemetry() != null) {
-					log.info("  ✈️ AssetTelemetry received");
-				} else if (response.getSubAssetTelemetry() != null) {
-					log.info("  🎥 SubAssetTelemetry received");
+				if (response.getTelemetry() != null && response.getTelemetry().getAsset() != null) {
+					log.info("  ✈️ Asset telemetry received");
+				} else if (response.getTelemetry() != null && response.getTelemetry().getSubAsset() != null) {
+					log.info("  🎥 Sub-asset telemetry received");
 				} else if (response.getError() != null) {
 					log.error("  ❌ Error received");
 				}

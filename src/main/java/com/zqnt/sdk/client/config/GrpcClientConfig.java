@@ -14,6 +14,7 @@ public class GrpcClientConfig {
     private ServiceConfig remoteControlConfig;
     private ServiceConfig missionAutonomyConfig;
     private ServiceConfig liveDataConfig;
+    private ServiceConfig connectorConfig;
 
     // Global retry configuration
     @Builder.Default

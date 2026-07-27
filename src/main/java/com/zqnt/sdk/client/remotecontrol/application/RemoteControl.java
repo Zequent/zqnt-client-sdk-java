@@ -1,13 +1,6 @@
 package com.zqnt.sdk.client.remotecontrol.application;
 
-import com.zqnt.sdk.client.remotecontrol.domains.DockOperationRequest;
-import com.zqnt.sdk.client.remotecontrol.domains.GoToRequest;
-import com.zqnt.sdk.client.remotecontrol.domains.LookAtRequest;
-import com.zqnt.sdk.client.remotecontrol.domains.ManualControlRequest;
-import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
-import com.zqnt.sdk.client.remotecontrol.domains.ReturnToHomeRequest;
-import com.zqnt.sdk.client.remotecontrol.domains.TakeoffRequest;
-import com.zqnt.sdk.client.remotecontrol.domains.TakeoffResponse;
+import com.zqnt.sdk.client.remotecontrol.domains.*;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -37,4 +30,7 @@ public interface RemoteControl {
     CompletableFuture<RemoteControlResponse> debugMode(DockOperationRequest request);
     CompletableFuture<RemoteControlResponse> changeAcMode(DockOperationRequest request);
     CompletableFuture<RemoteControlResponse> takePhoto(DockOperationRequest request);
+
+    // Payload / integrator-defined commands
+    CompletableFuture<CustomCommandResponse> sendCustomCommand(CustomCommandRequest request);
 }

@@ -1,14 +1,14 @@
 package com.zqnt.sdk.client;
 
 import com.zqnt.sdk.client.config.ServiceConfig;
+import com.zqnt.sdk.client.connector.application.Connector;
 import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
 import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -41,6 +41,11 @@ class ZequentClientTest {
 				.done()
 				.liveData()
 				.port(8003)
+				.usePlaintext(true)
+				.useStork(false)
+				.done()
+				.connector()
+				.port(8010)
 				.usePlaintext(true)
 				.useStork(false)
 				.done()
@@ -86,6 +91,12 @@ class ZequentClientTest {
 	}
 
 	@Test
+	void testConnectorService() {
+		Connector connector = client.connector();
+		assertNotNull(connector, "Connector should not be null");
+	}
+
+	@Test
 	void testClientConfiguration() {
 		// Konfiguration sollte korrekt gesetzt sein
 		assertNotNull(client.getConfig(), "Config sollte nicht null sein");
@@ -119,6 +130,11 @@ class ZequentClientTest {
 		assertNotNull(ldConfig);
 		assertEquals("live-data", ldConfig.getServiceName());
 		assertEquals(8003, ldConfig.getPort());
+
+		ServiceConfig connectorConfig = client.getConfig().getConnectorConfig();
+		assertNotNull(connectorConfig);
+		assertEquals("connector", connectorConfig.getServiceName());
+		assertEquals(8010, connectorConfig.getPort());
 	}
 
 	@Test
@@ -154,6 +170,7 @@ class ZequentClientTest {
 		assertNotNull(minimalClient.remoteControl());
 		assertNotNull(minimalClient.missionAutonomy());
 		assertNotNull(minimalClient.liveData());
+		assertNotNull(minimalClient.connector());
 
 		minimalClient.close();
 	}

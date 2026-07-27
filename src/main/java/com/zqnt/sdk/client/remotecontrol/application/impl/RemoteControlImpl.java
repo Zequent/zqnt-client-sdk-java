@@ -6,19 +6,9 @@ import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.remotecontrol.application.ManualControlInputSession;
 import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
 import com.zqnt.sdk.client.remotecontrol.domains.*;
-import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
-import com.zqnt.utils.common.proto.ChangeAcModeCommandRequest;
-import com.zqnt.utils.common.proto.CloseCoverCommandRequest;
-import com.zqnt.utils.common.proto.CommandResponse;
-import com.zqnt.utils.common.proto.CoordinateCommandRequest;
-import com.zqnt.utils.common.proto.Coordinates;
-import com.zqnt.utils.common.proto.EmptyCommandRequest;
-import com.zqnt.utils.common.proto.LookAtCommandRequest;
-import com.zqnt.utils.common.proto.ManualControlCommandRequest;
-import com.zqnt.utils.common.proto.ManualControlInputCommandRequest;
-import com.zqnt.utils.common.proto.RequestBase;
-import com.zqnt.utils.common.proto.ReturnToHomeCommandRequest;
-import com.zqnt.utils.common.proto.ToggleCommandRequest;
+import com.zqnt.sdk.client.remotecontrol.domains.ManualControlRequest;
+import com.zqnt.sdk.client.remotecontrol.domains.ReturnToHomeRequest;
+import com.zqnt.utils.common.proto.*;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.remotecontrol.proto.RemoteControlServiceGrpc;
 import io.grpc.ManagedChannel;
@@ -47,6 +37,7 @@ public class RemoteControlImpl implements RemoteControl {
 	private final GrpcResilience resilience;
 	private final GrpcClientConfig config;
 	private final ScheduledExecutorService timeoutScheduler;
+	private final CustomCommandMapper customCommandMapper = new CustomCommandMapper();
 
 	/**
 	 * Private constructor - use create() factory method.
@@ -378,6 +369,15 @@ public class RemoteControlImpl implements RemoteControl {
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
+	@Override
+	public CompletableFuture<com.zqnt.sdk.client.remotecontrol.domains.CustomCommandResponse> sendCustomCommand(
+			com.zqnt.sdk.client.remotecontrol.domains.CustomCommandRequest request) {
+		var protoRequest = customCommandMapper.toProto(request);
+
+		return executeCustomCommandAsync(observer -> asyncStub.sendCustomCommand(protoRequest, observer))
+				.thenApply(proto -> customCommandMapper.fromProto(proto, request.getSn()));
+	}
+
 	private static void validateSn(String sn) {
 		if (sn == null || sn.isBlank()) {
 			throw new IllegalArgumentException("SN must not be null or blank");
@@ -461,6 +461,43 @@ public class RemoteControlImpl implements RemoteControl {
 		});
 	}
 
+	private CompletableFuture<com.zqnt.utils.common.proto.CustomCommandResponse> executeCustomCommandAsync(
+			java.util.function.Consumer<StreamObserver<com.zqnt.utils.common.proto.CustomCommandResponse>> stubCall) {
+		int timeout = config.getRequestTimeoutSeconds();
+		return resilience.executeWithResilienceAsync(() -> {
+			CompletableFuture<com.zqnt.utils.common.proto.CustomCommandResponse> future = new CompletableFuture<>();
+			AtomicBoolean completed = new AtomicBoolean(false);
+			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+				if (completed.compareAndSet(false, true)) {
+					future.completeExceptionally(
+							new TimeoutException("Custom command timed out after " + timeout + "s"));
+				}
+			}, timeout, TimeUnit.SECONDS);
+
+			StreamObserver<com.zqnt.utils.common.proto.CustomCommandResponse> observer = new StreamObserver<>() {
+				@Override
+				public void onNext(com.zqnt.utils.common.proto.CustomCommandResponse response) {
+					if (completed.compareAndSet(false, true)) {
+						timeoutTask.cancel(false);
+						future.complete(response);
+					}
+				}
+
+				@Override
+				public void onError(Throwable error) {
+					if (completed.compareAndSet(false, true)) {
+						timeoutTask.cancel(false);
+						future.completeExceptionally(error);
+					}
+				}
+
+				@Override public void onCompleted() { }
+			};
+			stubCall.accept(observer);
+			return future;
+		});
+	}
+
 	/**
 	 * Shutdown executors when done.
 	 * Should be called when closing the client.
@@ -519,4 +556,5 @@ public class RemoteControlImpl implements RemoteControl {
 						.build() : null)
 				.build();
 	}
+
 }

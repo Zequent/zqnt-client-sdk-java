@@ -52,6 +52,8 @@ zequent.remote-control-service.host=localhost
 zequent.remote-control-service.port=8002
 zequent.live-data-service.host=localhost
 zequent.live-data-service.port=8003
+zequent.connector-service.host=localhost
+zequent.connector-service.port=8010
 ```
 
 **Usage:**
@@ -64,8 +66,46 @@ public class DroneService {
     public void handleTelemetry() {
         zequent.liveData().streamTelemetryData();
     }
+
+    public CompletableFuture<ConnectorResponse> findAsset(String sn) {
+        ConnectorRequestContext context = ConnectorRequestContext.builder()
+                .sn(sn)
+                .tid(UUID.randomUUID().toString())
+                .build();
+        return zequent.connector().getAssetBySn(
+                GetAssetBySnRequest.builder().context(context).build()
+        );
+    }
 }
 ```
+
+Payload commands use the stable logical command advertised by the Connector; vendor methods stay internal to the edge adapter:
+
+```java
+return zequent.connector().getAssetBySn(
+        GetAssetBySnRequest.builder().context(context).build()
+).thenCompose(assetResponse -> {
+    AssetPayloadDTO payload = assetResponse.getAsset().getPayloads().stream()
+            .filter(value -> "searchlight-1".equals(value.getExternalId()))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("Payload is not registered"));
+
+    PayloadCommandDefinitionDTO command = payload.getCommands().stream()
+            .filter(value -> "searchlight.mode.set".equals(value.getCommand()))
+            .filter(value -> Boolean.TRUE.equals(value.getAvailable()))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("Command is not available"));
+
+    return zequent.remoteControl().sendCustomCommand(CustomCommandRequest.builder()
+            .sn(sn)
+            .componentId(payload.getExternalId())
+            .commandType(command.getCommand())
+            .params(Map.of("mode", 1, "group", 0))
+            .build());
+});
+```
+
+The edge adapter resolves `commandType` to its registered `vendorMethod` and validates the payload again before execution.
 
 **That's it!** The SDK auto-configures via `ZequentClientProducer` (CDI).
 
@@ -80,11 +120,12 @@ public class ZequentConfig {
 
     @Bean
     public ZequentClient zequentClient() {
-        // Uses defaults: localhost:8002, 8004, 8003
+        // Uses defaults: localhost:8002, 8004, 8003, 8010
         return ZequentClient.builder()
                 .remoteControl().done()
                 .missionAutonomy().done()
                 .liveData().done()
+                .connector().done()
                 .build();
     }
 }
@@ -114,6 +155,7 @@ public ZequentClient zequentClient(
             .remoteControl().host(host).port(port).done()
             .missionAutonomy().done()
             .liveData().done()
+            .connector().host("localhost").port(8010).done()
             .build();
 }
 ```
@@ -156,7 +198,7 @@ mvn deploy
 
 This SDK provides:
 - `ZequentClient` - Main client interface
-- Service interfaces (RemoteControl, MissionAutonomy, LiveData)
+- Service interfaces (RemoteControl, MissionAutonomy, LiveData, Connector)
 - Request/Response models
 - Auto-configuration via CDI (Quarkus)
 - gRPC channel management
@@ -174,9 +216,9 @@ The SDK is compiled with Java 21 for maximum customer compatibility. If your app
 ## ✅ Features
 
 ✅ **Framework Agnostic** - Works with Spring Boot, Quarkus, Micronaut, etc.
-✅ **Sensible Defaults** - Works out-of-the-box (localhost:8002/8004/8003)
+✅ **Sensible Defaults** - Works out-of-the-box (localhost:8002/8004/8003/8010)
 ✅ **Property-Based Config** - Override via `application.properties` (optional)
-✅ **Multi-Service Support** - Remote Control, Mission Autonomy, Live Data
+✅ **Multi-Service Support** - Remote Control, Mission Autonomy, Live Data, Connector
 ✅ **Built-in Resilience** - Retry, Circuit Breaker, Timeouts
 ✅ **Load Balancing** - Round-robin, Least-requests
 ✅ **Service Discovery** - Stork support for Kubernetes

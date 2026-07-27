@@ -2,6 +2,8 @@ package com.zqnt.sdk.client;
 
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.config.ZequentClientConfigFactory;
+import com.zqnt.sdk.client.connector.application.Connector;
+import com.zqnt.sdk.client.connector.application.impl.ConnectorImpl;
 import com.zqnt.sdk.client.grpc.ChannelFactory;
 import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.livedata.application.impl.LiveDataImpl;
@@ -51,17 +53,20 @@ public class ZequentClientProducer {
         ManagedChannel remoteControlChannel = ChannelFactory.createChannel(config.getRemoteControlConfig());
         ManagedChannel missionAutonomyChannel = ChannelFactory.createChannel(config.getMissionAutonomyConfig());
         ManagedChannel liveDataChannel = ChannelFactory.createChannel(config.getLiveDataConfig());
+        ManagedChannel connectorChannel = ChannelFactory.createChannel(config.getConnectorConfig());
         channels.add(remoteControlChannel);
         channels.add(missionAutonomyChannel);
         channels.add(liveDataChannel);
+        channels.add(connectorChannel);
 
         // Create service implementations (internal, not exposed as beans)
         RemoteControl remoteControl =RemoteControlImpl.create(config, remoteControlChannel);
         MissionAutonomy missionAutonomy = MissionAutonomyImpl.create(config, missionAutonomyChannel);
         LiveData liveData = LiveDataImpl.create(config, liveDataChannel);
+        Connector connector = ConnectorImpl.create(config, connectorChannel);
 
         // Create and return ZequentClient
-        return new ZequentClient(config, remoteControl, missionAutonomy, liveData, channels);
+        return new ZequentClient(config, remoteControl, missionAutonomy, liveData, connector, channels);
     }
 
     public void disposeZequentClient(@Disposes ZequentClient client) {
