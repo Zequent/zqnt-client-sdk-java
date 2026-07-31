@@ -1,7 +1,7 @@
 package com.zqnt.sdk.client.livedata.application;
 
 import com.zqnt.sdk.client.livedata.domains.*;
-import com.zqnt.utils.common.proto.CommandResponse;
+import com.zqnt.utils.devicecontrol.proto.CommandResponse;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;

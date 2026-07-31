@@ -7,15 +7,14 @@ import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
 import com.zqnt.utils.JsonUtils;
-import com.zqnt.utils.common.proto.*;
+import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
-import com.zqnt.utils.mission.proto.MissionAutonomyServiceGrpc;
+import com.zqnt.utils.mission.proto.*;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 import com.zqnt.utils.missionautonomy.domains.config.*;
-import com.zqnt.utils.workflow.proto.*;
 import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 
@@ -589,7 +588,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
 
-    private MissionResponse toMissionResponse(com.zqnt.utils.workflow.proto.MissionResponse proto) {
+    private MissionResponse toMissionResponse(com.zqnt.utils.mission.proto.MissionResponse proto) {
         var builder = MissionResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -622,7 +621,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         return builder.build();
     }
 
-    private TaskResponse toTaskResponse(com.zqnt.utils.workflow.proto.TaskResponse proto) {
+    private TaskResponse toTaskResponse(com.zqnt.utils.mission.proto.TaskResponse proto) {
         var builder = TaskResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())
@@ -653,7 +652,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         return builder.build();
     }
 
-    private SchedulerResponse toSchedulerResponse(com.zqnt.utils.workflow.proto.SchedulerResponse proto) {
+    private SchedulerResponse toSchedulerResponse(com.zqnt.utils.mission.proto.SchedulerResponse proto) {
         var builder = SchedulerResponse.builder()
                 .success(!proto.getHasErrors())
                 .tid(proto.getTid())

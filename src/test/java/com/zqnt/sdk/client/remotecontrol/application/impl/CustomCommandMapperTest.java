@@ -34,8 +34,8 @@ class CustomCommandMapperTest {
         assertEquals("asset-sn", proto.getBase().getSn());
         assertEquals("transaction-1", proto.getBase().getTid());
         assertEquals("asset-1", proto.getBase().getAssetId());
-        assertEquals("searchlight-1", proto.getComponentId());
-        assertEquals("searchlight.mode.set", proto.getCommandType());
+        assertEquals("searchlight-1", proto.getTarget().getTargetRef());
+        assertEquals("searchlight.mode.set", proto.getCommandId());
         assertEquals(2d, proto.getParams().getFieldsOrThrow("mode").getNumberValue());
         assertEquals(0d, proto.getParams().getFieldsOrThrow("options")
                 .getStructValue().getFieldsOrThrow("group").getNumberValue());
@@ -47,9 +47,9 @@ class CustomCommandMapperTest {
         Struct result = Struct.newBuilder()
                 .putFields("accepted", Value.newBuilder().setBoolValue(true).build())
                 .build();
-        var proto = com.zqnt.utils.common.proto.CustomCommandResponse.newBuilder()
+        var proto = com.zqnt.utils.devicecontrol.proto.CustomCommandResponse.newBuilder()
                 .setHasErrors(false)
-                .setCommandType("searchlight.mode.set")
+                .setCommandId("searchlight.mode.set")
                 .setMeta(ResponseMeta.newBuilder()
                         .setTid("transaction-2")
                         .setSn("asset-sn")

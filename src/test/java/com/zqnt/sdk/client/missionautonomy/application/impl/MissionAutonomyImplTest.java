@@ -1,8 +1,8 @@
 package com.zqnt.sdk.client.missionautonomy.application.impl;
 
-import com.zqnt.utils.common.proto.MissionProtoDTO;
-import com.zqnt.utils.common.proto.SchedulerProtoDTO;
-import com.zqnt.utils.common.proto.TaskProtoDTO;
+import com.zqnt.utils.mission.proto.MissionProtoDTO;
+import com.zqnt.utils.mission.proto.SchedulerProtoDTO;
+import com.zqnt.utils.mission.proto.TaskProtoDTO;
 import com.zqnt.utils.missionautonomy.domains.DynamicConfigDTO;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;

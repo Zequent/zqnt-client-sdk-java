@@ -6,7 +6,7 @@ import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
 import com.zqnt.sdk.client.remotecontrol.domains.DockOperationRequest;
 import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
 
-import com.zqnt.utils.common.proto.LiveDataServiceCommand;
+import com.zqnt.utils.devicecontrol.proto.LiveDataServiceCommand;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;

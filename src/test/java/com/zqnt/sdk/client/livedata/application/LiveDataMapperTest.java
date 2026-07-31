@@ -5,13 +5,13 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import com.zqnt.sdk.client.livedata.domains.StreamNotificationResponse;
 import com.zqnt.sdk.client.livedata.domains.StreamTelemetryResponse;
-import com.zqnt.utils.common.proto.MissionStatus;
-import com.zqnt.utils.common.proto.MissionType;
 import com.zqnt.utils.events.proto.MissionEvent;
 import com.zqnt.utils.events.proto.NotificationEvent;
 import com.zqnt.utils.events.proto.NotificationEventType;
 import com.zqnt.utils.events.proto.NotificationResponse;
 import com.zqnt.utils.livedata.proto.*;
+import com.zqnt.utils.mission.proto.MissionStatus;
+import com.zqnt.utils.mission.proto.MissionType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

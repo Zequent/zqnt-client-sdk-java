@@ -10,7 +10,6 @@ import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
 import com.zqnt.utils.JsonUtils;
 import com.zqnt.utils.asset.domains.AssetDTO;
 import com.zqnt.utils.asset.domains.AssetPayloadDTO;
-import com.zqnt.utils.asset.domains.PayloadCommandDefinitionDTO;
 import com.zqnt.utils.asset.domains.SubAssetDTO;
 import com.zqnt.utils.common.proto.*;
 import com.zqnt.utils.connector.proto.*;
@@ -18,11 +17,11 @@ import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.edge.sdk.domains.TelemetryData;
 import com.zqnt.utils.events.proto.*;
+import com.zqnt.utils.mission.proto.*;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 import com.zqnt.utils.missionautonomy.domains.WaypointDTO;
-import com.zqnt.utils.workflow.proto.UploadMissionNfzZonesRequest;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -106,31 +105,31 @@ final class ConnectorMapper {
         return builder.build();
     }
 
-    com.zqnt.utils.workflow.proto.GetMissionRequest getMission(
+    com.zqnt.utils.mission.proto.GetMissionRequest getMission(
             com.zqnt.sdk.client.connector.domains.GetMissionRequest request) {
-        return com.zqnt.utils.workflow.proto.GetMissionRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.GetMissionRequest.newBuilder()
                 .setBase(base(request.getContext())).setMissionId(request.getMissionId()).build();
     }
 
-    com.zqnt.utils.workflow.proto.CreateMissionRequest createMission(
+    com.zqnt.utils.mission.proto.CreateMissionRequest createMission(
             com.zqnt.sdk.client.connector.domains.CreateMissionRequest request) {
-        return com.zqnt.utils.workflow.proto.CreateMissionRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.CreateMissionRequest.newBuilder()
                 .setBase(base(request.getContext()))
                 .setMission(MissionAutonomyImpl.mapMissionDtoToProto(MissionProtoDTO.newBuilder(), request.getMission()))
                 .build();
     }
 
-    com.zqnt.utils.workflow.proto.UpdateMissionRequest updateMission(
+    com.zqnt.utils.mission.proto.UpdateMissionRequest updateMission(
             com.zqnt.sdk.client.connector.domains.UpdateMissionRequest request) {
-        return com.zqnt.utils.workflow.proto.UpdateMissionRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.UpdateMissionRequest.newBuilder()
                 .setBase(base(request.getContext())).setMissionId(request.getMissionId())
                 .setMission(MissionAutonomyImpl.mapMissionDtoToProto(MissionProtoDTO.newBuilder(), request.getMission()))
                 .build();
     }
 
-    com.zqnt.utils.workflow.proto.DeleteMissionRequest deleteMission(
+    com.zqnt.utils.mission.proto.DeleteMissionRequest deleteMission(
             com.zqnt.sdk.client.connector.domains.DeleteMissionRequest request) {
-        return com.zqnt.utils.workflow.proto.DeleteMissionRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.DeleteMissionRequest.newBuilder()
                 .setBase(base(request.getContext())).setMissionId(request.getMissionId()).build();
     }
 
@@ -144,61 +143,61 @@ final class ConnectorMapper {
         return builder.build();
     }
 
-    com.zqnt.utils.workflow.proto.GetTaskRequest getTask(
+    com.zqnt.utils.mission.proto.GetTaskRequest getTask(
             com.zqnt.sdk.client.connector.domains.GetTaskRequest request) {
-        return com.zqnt.utils.workflow.proto.GetTaskRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.GetTaskRequest.newBuilder()
                 .setBase(base(request.getContext())).setTaskId(request.getTaskId()).build();
     }
 
-    com.zqnt.utils.workflow.proto.GetTaskByFlightIdRequest getTaskByFlightId(
+    com.zqnt.utils.mission.proto.GetTaskByFlightIdRequest getTaskByFlightId(
             com.zqnt.sdk.client.connector.domains.GetTaskByFlightIdRequest request) {
-        return com.zqnt.utils.workflow.proto.GetTaskByFlightIdRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.GetTaskByFlightIdRequest.newBuilder()
                 .setBase(base(request.getContext())).setFlightId(request.getFlightId()).build();
     }
 
-    com.zqnt.utils.workflow.proto.GetWaypointsByTaskIdRequest getWaypoints(
+    com.zqnt.utils.mission.proto.GetWaypointsByTaskIdRequest getWaypoints(
             com.zqnt.sdk.client.connector.domains.GetWaypointsByTaskIdRequest request) {
-        return com.zqnt.utils.workflow.proto.GetWaypointsByTaskIdRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.GetWaypointsByTaskIdRequest.newBuilder()
                 .setBase(base(request.getContext())).setTaskId(request.getTaskId()).build();
     }
 
-    com.zqnt.utils.workflow.proto.CreateTaskRequest createTask(
+    com.zqnt.utils.mission.proto.CreateTaskRequest createTask(
             com.zqnt.sdk.client.connector.domains.CreateTaskRequest request) {
-        return com.zqnt.utils.workflow.proto.CreateTaskRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.CreateTaskRequest.newBuilder()
                 .setBase(base(request.getContext()))
                 .setTask(MissionAutonomyImpl.mapTaskDtoToProto(TaskProtoDTO.newBuilder(), request.getTask())).build();
     }
 
-    com.zqnt.utils.workflow.proto.UpdateTaskRequest updateTask(
+    com.zqnt.utils.mission.proto.UpdateTaskRequest updateTask(
             com.zqnt.sdk.client.connector.domains.UpdateTaskRequest request) {
-        return com.zqnt.utils.workflow.proto.UpdateTaskRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.UpdateTaskRequest.newBuilder()
                 .setBase(base(request.getContext())).setTaskId(request.getTaskId())
                 .setTask(MissionAutonomyImpl.mapTaskDtoToProto(TaskProtoDTO.newBuilder(), request.getTask())).build();
     }
 
-    com.zqnt.utils.workflow.proto.DeleteTaskRequest deleteTask(
+    com.zqnt.utils.mission.proto.DeleteTaskRequest deleteTask(
             com.zqnt.sdk.client.connector.domains.DeleteTaskRequest request) {
-        return com.zqnt.utils.workflow.proto.DeleteTaskRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.DeleteTaskRequest.newBuilder()
                 .setBase(base(request.getContext())).setTaskId(request.getTaskId()).build();
     }
 
-    com.zqnt.utils.workflow.proto.GetSchedulerRequest getScheduler(
+    com.zqnt.utils.mission.proto.GetSchedulerRequest getScheduler(
             com.zqnt.sdk.client.connector.domains.GetSchedulerRequest request) {
-        return com.zqnt.utils.workflow.proto.GetSchedulerRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.GetSchedulerRequest.newBuilder()
                 .setBase(base(request.getContext())).setSchedulerId(request.getSchedulerId()).build();
     }
 
-    com.zqnt.utils.workflow.proto.CreateSchedulerRequest createScheduler(
+    com.zqnt.utils.mission.proto.CreateSchedulerRequest createScheduler(
             com.zqnt.sdk.client.connector.domains.CreateSchedulerRequest request) {
-        return com.zqnt.utils.workflow.proto.CreateSchedulerRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.CreateSchedulerRequest.newBuilder()
                 .setBase(base(request.getContext()))
                 .setScheduler(MissionAutonomyImpl.mapSchedulerDtoToProto(
                         SchedulerProtoDTO.newBuilder(), request.getScheduler())).build();
     }
 
-    com.zqnt.utils.workflow.proto.CreateSchedulersRequest createSchedulers(
+    com.zqnt.utils.mission.proto.CreateSchedulersRequest createSchedulers(
             com.zqnt.sdk.client.connector.domains.CreateSchedulersRequest request) {
-        var builder = com.zqnt.utils.workflow.proto.CreateSchedulersRequest.newBuilder()
+        var builder = com.zqnt.utils.mission.proto.CreateSchedulersRequest.newBuilder()
                 .setBase(base(request.getContext()));
         if (request.getSchedulers() != null) request.getSchedulers().stream()
                 .map(value -> MissionAutonomyImpl.mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder(), value).build())
@@ -206,31 +205,31 @@ final class ConnectorMapper {
         return builder.build();
     }
 
-    com.zqnt.utils.workflow.proto.UpdateSchedulerRequest updateScheduler(
+    com.zqnt.utils.mission.proto.UpdateSchedulerRequest updateScheduler(
             com.zqnt.sdk.client.connector.domains.UpdateSchedulerRequest request) {
-        return com.zqnt.utils.workflow.proto.UpdateSchedulerRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.UpdateSchedulerRequest.newBuilder()
                 .setBase(base(request.getContext()))
                 .setSchedulerId(request.getSchedulerId()).setScheduler(MissionAutonomyImpl.mapSchedulerDtoToProto(
                         SchedulerProtoDTO.newBuilder(), request.getScheduler())).build();
     }
 
-    com.zqnt.utils.workflow.proto.DeleteSchedulerRequest deleteScheduler(
+    com.zqnt.utils.mission.proto.DeleteSchedulerRequest deleteScheduler(
             com.zqnt.sdk.client.connector.domains.DeleteSchedulerRequest request) {
-        return com.zqnt.utils.workflow.proto.DeleteSchedulerRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.DeleteSchedulerRequest.newBuilder()
                 .setBase(base(request.getContext())).setSchedulerId(request.getSchedulerId()).build();
     }
 
-    com.zqnt.utils.workflow.proto.DeleteSchedulersRequest deleteSchedulers(
+    com.zqnt.utils.mission.proto.DeleteSchedulersRequest deleteSchedulers(
             com.zqnt.sdk.client.connector.domains.DeleteSchedulersRequest request) {
-        var builder = com.zqnt.utils.workflow.proto.DeleteSchedulersRequest.newBuilder()
+        var builder = com.zqnt.utils.mission.proto.DeleteSchedulersRequest.newBuilder()
                 .setBase(base(request.getContext()));
         if (request.getSchedulerIds() != null) builder.addAllSchedulerIds(request.getSchedulerIds());
         return builder.build();
     }
 
-    com.zqnt.utils.workflow.proto.DeleteSchedulersByTaskRequest deleteSchedulersByTask(
+    com.zqnt.utils.mission.proto.DeleteSchedulersByTaskRequest deleteSchedulersByTask(
             com.zqnt.sdk.client.connector.domains.DeleteSchedulersByTaskRequest request) {
-        return com.zqnt.utils.workflow.proto.DeleteSchedulersByTaskRequest.newBuilder()
+        return com.zqnt.utils.mission.proto.DeleteSchedulersByTaskRequest.newBuilder()
                 .setBase(base(request.getContext())).setTaskId(request.getTaskId()).build();
     }
 
@@ -429,7 +428,7 @@ final class ConnectorMapper {
                 .error(proto.hasError() ? error(proto.getError()) : null).build();
     }
 
-    MissionResponse missionResponse(com.zqnt.utils.workflow.proto.MissionResponse proto) {
+    MissionResponse missionResponse(com.zqnt.utils.mission.proto.MissionResponse proto) {
         return MissionResponse.builder().success(!proto.getHasErrors()).tid(proto.getTid()).missionId(proto.getMissionId())
                 .timestamp(time(proto.getTimestamp())).error(proto.hasError() ? MissionResponse.ErrorInfo.builder()
                         .errorCode(proto.getError().getErrorCode().name()).errorMessage(proto.getError().getErrorMessage())
@@ -440,7 +439,7 @@ final class ConnectorMapper {
                 .build();
     }
 
-    TaskResponse taskResponse(com.zqnt.utils.workflow.proto.TaskResponse proto) {
+    TaskResponse taskResponse(com.zqnt.utils.mission.proto.TaskResponse proto) {
         return TaskResponse.builder().success(!proto.getHasErrors()).tid(proto.getTid()).taskId(proto.getTaskId())
                 .timestamp(time(proto.getTimestamp())).error(proto.hasError() ? TaskResponse.ErrorInfo.builder()
                         .errorCode(proto.getError().getErrorCode().name()).errorMessage(proto.getError().getErrorMessage())
@@ -451,7 +450,7 @@ final class ConnectorMapper {
                 .build();
     }
 
-    SchedulerResponse schedulerResponse(com.zqnt.utils.workflow.proto.SchedulerResponse proto) {
+    SchedulerResponse schedulerResponse(com.zqnt.utils.mission.proto.SchedulerResponse proto) {
         return SchedulerResponse.builder().success(!proto.getHasErrors()).tid(proto.getTid()).schedulerId(proto.getSchedulerId())
                 .timestamp(time(proto.getTimestamp())).error(proto.hasError() ? SchedulerResponse.ErrorInfo.builder()
                         .errorCode(proto.getError().getErrorCode().name()).errorMessage(proto.getError().getErrorMessage())
@@ -463,7 +462,7 @@ final class ConnectorMapper {
     }
 
     com.zqnt.sdk.client.connector.domains.WaypointsResponse waypointsResponse(
-            com.zqnt.utils.workflow.proto.WaypointsResponse proto) {
+            com.zqnt.utils.mission.proto.WaypointsResponse proto) {
         List<WaypointDTO> waypoints = proto.hasWaypoints() ? proto.getWaypoints().getWaypointsList().stream()
                 .map(value -> JsonUtils.fromJson(ProtoJsonUtils.toJson(value), WaypointDTO.class)).toList() : List.of();
         return com.zqnt.sdk.client.connector.domains.WaypointsResponse.builder()
@@ -556,9 +555,8 @@ final class ConnectorMapper {
                 .vendor(proto.hasVendor() ? proto.getVendor() : null).model(proto.hasModel() ? proto.getModel() : null)
                 .firmwareVersion(proto.hasFirmwareVersion() ? proto.getFirmwareVersion() : null)
                 .libraryVersion(proto.hasLibraryVersion() ? proto.getLibraryVersion() : null)
-                .capabilities(jsonMap(proto.hasCapabilitiesJson() ? proto.getCapabilitiesJson() : null))
                 .state(jsonMap(proto.hasStateJson() ? proto.getStateJson() : null))
-                .commands(proto.getCommandsList().stream().map(this::command).toList()).active(proto.getActive())
+                .commands(List.of()).active(proto.getActive())
                 .lastSeenAt(proto.hasLastSeenAt() ? time(proto.getLastSeenAt()) : null)
                 .createdAt(proto.hasCreatedAt() ? time(proto.getCreatedAt()) : null)
                 .modifiedAt(proto.hasModifiedAt() ? time(proto.getModifiedAt()) : null)
@@ -571,29 +569,11 @@ final class ConnectorMapper {
         set(builder::setSlotIndex, dto.getSlotIndex()); set(builder::setName, dto.getName()); set(builder::setSerialNumber, dto.getSerialNumber());
         set(builder::setKind, dto.getKind()); set(builder::setVendor, dto.getVendor()); set(builder::setModel, dto.getModel());
         set(builder::setFirmwareVersion, dto.getFirmwareVersion()); set(builder::setLibraryVersion, dto.getLibraryVersion());
-        if (dto.getCapabilities() != null) builder.setCapabilitiesJson(JsonUtils.toJson(dto.getCapabilities()));
         if (dto.getState() != null) builder.setStateJson(JsonUtils.toJson(dto.getState()));
-        if (dto.getCommands() != null) dto.getCommands().stream().map(this::command).forEach(builder::addCommands);
         if (dto.getLastSeenAt() != null) builder.setLastSeenAt(ProtobufHelpers.toTimestamp(dto.getLastSeenAt()));
         if (dto.getCreatedAt() != null) builder.setCreatedAt(ProtobufHelpers.toTimestamp(dto.getCreatedAt()));
         if (dto.getModifiedAt() != null) builder.setModifiedAt(ProtobufHelpers.toTimestamp(dto.getModifiedAt()));
         set(builder::setModifiedFrom, dto.getModifiedFrom()); return builder.build();
-    }
-
-    private PayloadCommandDefinitionDTO command(PayloadCommandDefinitionProtoDTO proto) {
-        return PayloadCommandDefinitionDTO.builder().command(proto.getCommand())
-                .vendorMethod(proto.hasVendorMethod() ? proto.getVendorMethod() : null)
-                .description(proto.hasDescription() ? proto.getDescription() : null)
-                .parameterSchema(jsonMap(proto.hasParameterSchemaJson() ? proto.getParameterSchemaJson() : null))
-                .available(proto.getAvailable()).build();
-    }
-
-    private PayloadCommandDefinitionProtoDTO command(PayloadCommandDefinitionDTO dto) {
-        var builder = PayloadCommandDefinitionProtoDTO.newBuilder().setCommand(dto.getCommand())
-                .setAvailable(Boolean.TRUE.equals(dto.getAvailable()));
-        set(builder::setVendorMethod, dto.getVendorMethod()); set(builder::setDescription, dto.getDescription());
-        if (dto.getParameterSchema() != null) builder.setParameterSchemaJson(JsonUtils.toJson(dto.getParameterSchema()));
-        return builder.build();
     }
 
     private FieldMask mask(List<String> paths) {

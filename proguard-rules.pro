@@ -1,25 +1,27 @@
 -dontwarn
+-dontshrink
 -dontoptimize
--dontpreverify
 
-# Quarkus reflection
--keep class io.quarkus.** { *; }
+# Keep the complete customer-facing binary API stable. Private implementation
+# details can still be renamed by ProGuard.
+-keepnames public class com.zqnt.sdk.client.**
+-keepclassmembers public class com.zqnt.sdk.client.** {
+    public protected *;
+}
+-keep public interface com.zqnt.sdk.client.** { *; }
+-keep public enum com.zqnt.sdk.client.** { *; }
 
-# CDI
--keep class jakarta.inject.** { *; }
--keep class jakarta.enterprise.** { *; }
-
-# REST
--keep class jakarta.ws.rs.** { *; }
-
-# application classes
--keep class org.example.** { *; }
-
-# main entrypoint
--keep class * {
-    public static void main(java.lang.String[]);
+# CDI and configuration may inspect constructors, fields and annotations.
+-keepclasseswithmembers,includedescriptorclasses class com.zqnt.sdk.client.** {
+    @jakarta.inject.Inject <init>(...);
+}
+# Arc resolves injected members by the names stored in the Jandex index.
+# Renaming these fields makes the index inconsistent with the bytecode.
+-keepclassmembers class com.zqnt.sdk.client.** {
+    @jakarta.inject.Inject *;
 }
 
-# remove debug info
+-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod,MethodParameters,Exceptions
+
+# Do not expose local source paths in stack traces.
 -renamesourcefileattribute SourceFile
--keepattributes Exceptions

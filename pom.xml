@@ -44,7 +44,6 @@
         <slf4j.version>2.0.16</slf4j.version>
         <jackson3.version>3.1.5</jackson3.version>
         <proguard.version>7.9.1</proguard.version>
-        <proguard-core.version>9.3.2</proguard-core.version>
     </properties>
 
     <dependencyManagement>
@@ -152,7 +151,7 @@
         <dependency>
             <groupId>com.zqnt</groupId>
             <artifactId>zqnt-utils-java</artifactId>
-            <version>1.0.0-PR5-7cd87de-SNAPSHOT</version>
+            <version>1.0.0-PR5-ec2c968-SNAPSHOT</version>
         </dependency>
         <!-- Test dependencies (framework-agnostic) -->
         <dependency>
@@ -172,40 +171,6 @@
 
     <build>
         <plugins>
-            <!-- Generate Source JAR (required for Maven Central) -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>3.3.0</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <!-- Generate Javadoc JAR (required for Maven Central) -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.6.3</version>
-                <configuration>
-                    <!-- Ignore all Javadoc warnings -->
-                    <doclint>none</doclint>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>attach-javadocs</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${compiler-plugin.version}</version>
@@ -246,67 +211,107 @@
                 </executions>
             </plugin>
 
-            <!-- ProGuard Obfuscation -->
-            <plugin>
-                <groupId>com.github.wvengen</groupId>
-                <artifactId>proguard-maven-plugin</artifactId>
-                <version>2.7.0</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>proguard</goal>
-                        </goals>
-                    </execution>
-                </executions>
-
-                <configuration>
-                    <proguardVersion>${proguard.version}</proguardVersion>
-                    <injar>${project.build.finalName}.jar</injar>
-                    <outjar>${project.build.finalName}.jar</outjar>
-                    <libs>
-                        <lib>${java.home}/jmods</lib>
-                    </libs>
-                    <attach>true</attach>
-                    <attachArtifactClassifier>obfuscated</attachArtifactClassifier>
-                    <proguardInclude>${project.basedir}/proguard-rules.pro</proguardInclude>
-                </configuration>
-                <dependencies>
-                    <dependency>
-                        <groupId>com.guardsquare</groupId>
-                        <artifactId>proguard-base</artifactId>
-                        <version>${proguard.version}</version>
-                    </dependency>
-                    <dependency>
-                        <groupId>com.guardsquare</groupId>
-                        <artifactId>proguard-core</artifactId>
-                        <version>${proguard-core.version}</version>
-                    </dependency>
-                </dependencies>
-            </plugin>
-
-            <!-- Attach original JAR with classifier -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <version>3.3.0</version>
-                <executions>
-                    <execution>
-                        <id>backup-original</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                        <configuration>
-                            <classifier>original</classifier>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
 
 
     </build>
+
+    <profiles>
+        <!-- Customer-facing build: replaces the regular Maven JAR with the obfuscated JAR. -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <version>3.6.2</version>
+                        <executions>
+                            <execution>
+                                <id>require-release-jdk</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireJavaVersion>
+                                            <version>[21,22)</version>
+                                            <message>The release profile must run with JDK 21.</message>
+                                        </requireJavaVersion>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>com.github.wvengen</groupId>
+                        <artifactId>proguard-maven-plugin</artifactId>
+                        <version>2.7.0</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>com.guardsquare</groupId>
+                                <artifactId>proguard-base</artifactId>
+                                <version>${proguard.version}</version>
+                                <scope>runtime</scope>
+                            </dependency>
+                        </dependencies>
+                        <executions>
+                            <execution>
+                                <id>obfuscate-main-artifact</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>proguard</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <proguardVersion>${proguard.version}</proguardVersion>
+                            <injar>${project.build.finalName}.jar</injar>
+                            <attach>false</attach>
+                            <attachMap>false</attachMap>
+                            <attachSeed>false</attachSeed>
+                            <libs>
+                                <lib>${java.home}/jmods/java.base.jmod</lib>
+                            </libs>
+                            <proguardInclude>${project.basedir}/proguard-rules.pro</proguardInclude>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Explicit opt-in for internal documentation builds; never used by deploy workflows. -->
+        <profile>
+            <id>documentation</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.11.2</version>
+                        <configuration><doclint>none</doclint></configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <!-- Publishing Configuration - GitHub Packages -->
     <distributionManagement>

@@ -3,10 +3,10 @@ package com.zqnt.sdk.client.remotecontrol.application.impl;
 import com.zqnt.sdk.client.remotecontrol.application.ManualControlInputSession;
 import com.zqnt.sdk.client.remotecontrol.domains.ManualControlInput;
 import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
-import com.zqnt.utils.common.proto.CommandResponse;
-import com.zqnt.utils.common.proto.ManualControlInputCommandRequest;
 import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtobufHelpers;
+import com.zqnt.utils.devicecontrol.proto.CommandResponse;
+import com.zqnt.utils.devicecontrol.proto.ManualControlInputCommandRequest;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 
@@ -62,7 +62,7 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
         log.debug("Sending manual control input for SN: {}, roll={}, pitch={}, yaw={}, throttle={}, gimbalPitch={}",
                 sn, input.getRoll(), input.getPitch(), input.getYaw(), input.getThrottle(), input.getGimbalPitch());
 
-        var builder = com.zqnt.utils.common.proto.ManualControlInput.newBuilder();
+        var builder = com.zqnt.utils.devicecontrol.proto.ManualControlInput.newBuilder();
 
         if (input.getRoll() != null) {
             builder.setRoll(input.getRoll());

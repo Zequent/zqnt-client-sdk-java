@@ -1,7 +1,11 @@
 package com.zqnt.sdk.client.livedata.domains;
 
-import com.zqnt.utils.common.proto.*;
+import com.zqnt.utils.common.proto.ErrorCode;
 import com.zqnt.utils.events.proto.NotificationEventType;
+import com.zqnt.utils.mission.proto.MissionStatus;
+import com.zqnt.utils.mission.proto.MissionType;
+import com.zqnt.utils.mission.proto.TaskStatus;
+import com.zqnt.utils.mission.proto.TaskTypeProto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

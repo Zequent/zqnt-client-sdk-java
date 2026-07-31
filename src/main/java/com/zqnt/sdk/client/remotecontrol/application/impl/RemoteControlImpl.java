@@ -8,8 +8,9 @@ import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
 import com.zqnt.sdk.client.remotecontrol.domains.*;
 import com.zqnt.sdk.client.remotecontrol.domains.ManualControlRequest;
 import com.zqnt.sdk.client.remotecontrol.domains.ReturnToHomeRequest;
-import com.zqnt.utils.common.proto.*;
+import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtobufHelpers;
+import com.zqnt.utils.devicecontrol.proto.*;
 import com.zqnt.utils.remotecontrol.proto.RemoteControlServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
@@ -80,7 +81,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 		var protoRequest = CoordinateCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setRequest(com.zqnt.utils.common.proto.Coordinates.newBuilder()
+				.setCoordinate(GeoCoordinate.newBuilder()
 						.setLatitude(request.getLatitude())
 						.setLongitude(request.getLongitude())
 						.setAltitude(request.getAltitude())
@@ -99,7 +100,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 		var protoRequest = CoordinateCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setRequest(Coordinates.newBuilder()
+				.setCoordinate(GeoCoordinate.newBuilder()
 						.setLatitude(request.getLatitude())
 						.setLongitude(request.getLongitude())
 						.setAltitude(request.getAltitude())
@@ -116,7 +117,7 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("ReturnToHome: sn={}", request.getSn());
 
-		var rthBuilder = com.zqnt.utils.common.proto.ReturnToHomeRequest.newBuilder();
+		var rthBuilder = com.zqnt.utils.devicecontrol.proto.ReturnToHomeRequest.newBuilder();
 		if (request.getAltitude() != null) {
 			rthBuilder.setAltitude(request.getAltitude());
 		}
@@ -138,7 +139,7 @@ public class RemoteControlImpl implements RemoteControl {
 
 		var protoRequest = LookAtCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setRequest(Coordinates.newBuilder()
+				.setCoordinate(GeoCoordinate.newBuilder()
 						.setLatitude(request.getLatitude())
 						.setLongitude(request.getLongitude())
 						.setAltitude(request.getAltitude())
@@ -164,7 +165,7 @@ public class RemoteControlImpl implements RemoteControl {
 		}
 		log.info("EnterManualControl: sn={}", request.getSn());
 
-		var manualControlBuilder = com.zqnt.utils.common.proto.ManualControlRequest.newBuilder()
+		var manualControlBuilder = com.zqnt.utils.devicecontrol.proto.ManualControlRequest.newBuilder()
 				.setClientId(request.getClientId())
 				.setUserId(request.getUserId())
 				.setSessionId(request.getSessionId());
@@ -197,7 +198,7 @@ public class RemoteControlImpl implements RemoteControl {
 		}
 		log.info("ExitManualControl: sn={}", request.getSn());
 
-		var manualControlBuilder = com.zqnt.utils.common.proto.ManualControlRequest.newBuilder()
+		var manualControlBuilder = com.zqnt.utils.devicecontrol.proto.ManualControlRequest.newBuilder()
 				.setClientId(request.getClientId())
 				.setUserId(request.getUserId())
 				.setSessionId(request.getSessionId());
@@ -342,7 +343,7 @@ public class RemoteControlImpl implements RemoteControl {
 				.setEnabled(request.getValue() != null && request.getValue())
 				.build();
 
-		return executeAsync(observer -> asyncStub.enterOrCloseRemoteDebugMode(protoRequest, observer))
+		return executeAsync(observer -> asyncStub.setRemoteDebugMode(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -365,7 +366,7 @@ public class RemoteControlImpl implements RemoteControl {
 		var protoRequest = EmptyCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.build();
-		return executeAsync(observer -> asyncStub.takePhoto(protoRequest, observer))
+		return executeAsync(observer -> asyncStub.capturePhoto(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -461,11 +462,11 @@ public class RemoteControlImpl implements RemoteControl {
 		});
 	}
 
-	private CompletableFuture<com.zqnt.utils.common.proto.CustomCommandResponse> executeCustomCommandAsync(
-			java.util.function.Consumer<StreamObserver<com.zqnt.utils.common.proto.CustomCommandResponse>> stubCall) {
+	private CompletableFuture<com.zqnt.utils.devicecontrol.proto.CustomCommandResponse> executeCustomCommandAsync(
+			java.util.function.Consumer<StreamObserver<com.zqnt.utils.devicecontrol.proto.CustomCommandResponse>> stubCall) {
 		int timeout = config.getRequestTimeoutSeconds();
 		return resilience.executeWithResilienceAsync(() -> {
-			CompletableFuture<com.zqnt.utils.common.proto.CustomCommandResponse> future = new CompletableFuture<>();
+			CompletableFuture<com.zqnt.utils.devicecontrol.proto.CustomCommandResponse> future = new CompletableFuture<>();
 			AtomicBoolean completed = new AtomicBoolean(false);
 			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
 				if (completed.compareAndSet(false, true)) {
@@ -474,9 +475,9 @@ public class RemoteControlImpl implements RemoteControl {
 				}
 			}, timeout, TimeUnit.SECONDS);
 
-			StreamObserver<com.zqnt.utils.common.proto.CustomCommandResponse> observer = new StreamObserver<>() {
+			StreamObserver<com.zqnt.utils.devicecontrol.proto.CustomCommandResponse> observer = new StreamObserver<>() {
 				@Override
-				public void onNext(com.zqnt.utils.common.proto.CustomCommandResponse response) {
+				public void onNext(com.zqnt.utils.devicecontrol.proto.CustomCommandResponse response) {
 					if (completed.compareAndSet(false, true)) {
 						timeoutTask.cancel(false);
 						future.complete(response);

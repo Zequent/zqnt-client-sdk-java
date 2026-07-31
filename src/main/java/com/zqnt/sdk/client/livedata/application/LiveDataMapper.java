@@ -4,8 +4,12 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import com.zqnt.sdk.client.livedata.domains.*;
 import com.zqnt.sdk.client.livedata.domains.StreamTelemetryRequest;
-import com.zqnt.utils.common.proto.*;
+import com.zqnt.utils.common.proto.GlobalErrorMessage;
+import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtobufHelpers;
+import com.zqnt.utils.devicecontrol.proto.ChangeCameraLensRequest;
+import com.zqnt.utils.devicecontrol.proto.ChangeCameraZoomRequest;
+import com.zqnt.utils.devicecontrol.proto.LiveDataServiceCommand;
 import com.zqnt.utils.edge.sdk.domains.TelemetryData;
 import com.zqnt.utils.events.proto.*;
 import com.zqnt.utils.livedata.proto.*;
@@ -451,6 +455,7 @@ public class LiveDataMapper {
             case ASSET_STATUS -> NotificationEventType.NOTIFICATION_EVENT_ASSET_STATUS;
             case TASK -> NotificationEventType.NOTIFICATION_EVENT_TASK;
             case MISSION -> NotificationEventType.NOTIFICATION_EVENT_MISSION;
+            case ASSET_RUNTIME -> NotificationEventType.NOTIFICATION_EVENT_ASSET_RUNTIME;
             case ERROR, EVENT_NOT_SET -> null;
         };
     }
@@ -479,19 +484,19 @@ public class LiveDataMapper {
     /**
      * Maps LiveDataStartLiveStreamRequest POJO to proto
      */
-    public com.zqnt.utils.common.proto.LiveStreamStartCommandRequest toProtoStartLiveStreamRequest(
+    public com.zqnt.utils.devicecontrol.proto.LiveStreamStartCommandRequest toProtoStartLiveStreamRequest(
             LiveDataStartLiveStreamRequest request) {
         if (request == null) {
             return null;
         }
 
-        var requestBuilder = com.zqnt.utils.common.proto.LiveStreamStartCommandPayload.newBuilder()
+        var requestBuilder = com.zqnt.utils.devicecontrol.proto.LiveStreamStartCommandPayload.newBuilder()
                 .setVideoId(request.getVideoId())
                 .setStreamServer(request.getStreamServer())
                 .setStreamType(request.getStreamType())
                 .setAssetType(request.getAssetType());
 
-        return com.zqnt.utils.common.proto.LiveStreamStartCommandRequest.newBuilder()
+        return com.zqnt.utils.devicecontrol.proto.LiveStreamStartCommandRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), null, true, false))
                 .setRequest(requestBuilder.build())
                 .build();
@@ -500,23 +505,23 @@ public class LiveDataMapper {
     /**
      * Maps LiveDataStopLiveStreamRequest POJO to proto
      */
-    public com.zqnt.utils.common.proto.LiveStreamStopCommandRequest toProtoStopLiveStreamRequest(
+    public com.zqnt.utils.devicecontrol.proto.LiveStreamStopCommandRequest toProtoStopLiveStreamRequest(
             LiveDataStopLiveStreamRequest request) {
         if (request == null) {
             return null;
         }
 
-        var requestBuilder = com.zqnt.utils.common.proto.LiveStreamStopCommandPayload.newBuilder()
+        var requestBuilder = com.zqnt.utils.devicecontrol.proto.LiveStreamStopCommandPayload.newBuilder()
                 .setVideoId(request.getVideoId());
 
-        return com.zqnt.utils.common.proto.LiveStreamStopCommandRequest.newBuilder()
+        return com.zqnt.utils.devicecontrol.proto.LiveStreamStopCommandRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), true, false))
                 .setRequest(requestBuilder.build())
                 .build();
     }
 
-    public com.zqnt.utils.common.proto.ChangeCameraLensCommandRequest toProtoChangeLensRequest(ChangeLensRequest request) {
-        return com.zqnt.utils.common.proto.ChangeCameraLensCommandRequest.newBuilder()
+    public com.zqnt.utils.devicecontrol.proto.ChangeCameraLensCommandRequest toProtoChangeLensRequest(ChangeLensRequest request) {
+        return com.zqnt.utils.devicecontrol.proto.ChangeCameraLensCommandRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), false, true))
                 .setRequest(ChangeCameraLensRequest.newBuilder()
                         .setLens(request.getLens())
@@ -525,8 +530,8 @@ public class LiveDataMapper {
     }
 
 
-    public com.zqnt.utils.common.proto.ChangeCameraZoomCommandRequest toProtoChangeZoomRequest(ChangeZoomRequest request) {
-        return com.zqnt.utils.common.proto.ChangeCameraZoomCommandRequest.newBuilder()
+    public com.zqnt.utils.devicecontrol.proto.ChangeCameraZoomCommandRequest toProtoChangeZoomRequest(ChangeZoomRequest request) {
+        return com.zqnt.utils.devicecontrol.proto.ChangeCameraZoomCommandRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), false, true))
                 .setRequest(ChangeCameraZoomRequest.newBuilder()
                         .setLens(request.getLens())

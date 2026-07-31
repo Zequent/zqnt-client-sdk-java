@@ -9,6 +9,8 @@ import com.zqnt.sdk.client.remotecontrol.domains.CustomCommandResponse;
 import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
 import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtobufHelpers;
+import com.zqnt.utils.devicecontrol.proto.CapabilityTarget;
+import com.zqnt.utils.devicecontrol.proto.CapabilityTargetType;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,7 +19,7 @@ import java.util.UUID;
 
 final class CustomCommandMapper {
 
-    com.zqnt.utils.common.proto.CustomCommandRequest toProto(CustomCommandRequest request) {
+    com.zqnt.utils.devicecontrol.proto.CustomCommandRequest toProto(CustomCommandRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         requireText(request.getSn(), "sn");
         requireText(request.getCommandType(), "commandType");
@@ -28,15 +30,19 @@ final class CustomCommandMapper {
                 .setTimestamp(ProtobufHelpers.now());
         if (hasText(request.getAssetId())) base.setAssetId(request.getAssetId());
 
-        var builder = com.zqnt.utils.common.proto.CustomCommandRequest.newBuilder()
+        var builder = com.zqnt.utils.devicecontrol.proto.CustomCommandRequest.newBuilder()
                 .setBase(base)
-                .setCommandType(request.getCommandType())
+                .setCommandId(request.getCommandType())
                 .setParams(mapToStruct(request.getParams()));
-        if (hasText(request.getComponentId())) builder.setComponentId(request.getComponentId());
+        if (hasText(request.getComponentId())) {
+            builder.setTarget(CapabilityTarget.newBuilder()
+                    .setType(CapabilityTargetType.CAPABILITY_TARGET_TYPE_COMPONENT)
+                    .setTargetRef(request.getComponentId()));
+        }
         return builder.build();
     }
 
-    CustomCommandResponse fromProto(com.zqnt.utils.common.proto.CustomCommandResponse proto, String sn) {
+    CustomCommandResponse fromProto(com.zqnt.utils.devicecontrol.proto.CustomCommandResponse proto, String sn) {
         var meta = proto.getMeta();
         return CustomCommandResponse.builder()
                 .success(!proto.getHasErrors())
@@ -44,7 +50,7 @@ final class CustomCommandMapper {
                 .tid(meta.getTid())
                 .assetId(meta.hasAssetId() ? meta.getAssetId() : null)
                 .message(meta.hasResponseMessage() ? meta.getResponseMessage() : null)
-                .commandType(proto.getCommandType())
+                .commandType(proto.getCommandId())
                 .result(proto.hasResult() ? structToMap(proto.getResult()) : Map.of())
                 .error(proto.hasError() ? RemoteControlResponse.ErrorInfo.builder()
                         .errorCode(proto.getError().getErrorCode().name())

@@ -1,12 +1,12 @@
 package com.zqnt.sdk.client.livedata.application.impl;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.livedata.application.LiveData;
 import com.zqnt.sdk.client.livedata.application.LiveDataMapper;
 import com.zqnt.sdk.client.livedata.domains.*;
-import com.zqnt.utils.common.proto.CommandResponse;
-import com.zqnt.utils.events.proto.NotificationResponse;
+import com.zqnt.utils.devicecontrol.proto.CommandResponse;
 import com.zqnt.utils.livedata.proto.LiveDataServiceGrpc;
 import com.zqnt.utils.livedata.proto.LiveDataTelemetryResponse;
 import io.grpc.ManagedChannel;
@@ -15,6 +15,7 @@ import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -125,7 +126,7 @@ public class LiveDataImpl implements LiveData {
         var protoRequest = liveDataMapper.toProtoRequest(request);
 
         // STOP is a one-shot server command, not a long-lived subscription.
-        if (request.getCommand() == com.zqnt.utils.common.proto.LiveDataServiceCommand.LIVE_DATA_COMMAND_STOP_TELEMETRY_STREAM) {
+        if (request.getCommand() == com.zqnt.utils.devicecontrol.proto.LiveDataServiceCommand.LIVE_DATA_COMMAND_STOP_TELEMETRY_STREAM) {
             handle.stop();
             try {
                 asyncStub.streamTelemetry(protoRequest, new StreamObserver<>() {
@@ -330,11 +331,11 @@ public class LiveDataImpl implements LiveData {
 
     static long reconnectDelayMillis(int attempt, long configuredBaseDelay, int configuredMaxExponent) {
         long baseDelay = Math.max(1L, configuredBaseDelay);
-        int exponent = Math.min(Math.max(0, attempt - 1), Math.min(30, Math.max(0, configuredMaxExponent)));
+        int exponent = Math.clamp(attempt - 1, 0, Math.clamp(configuredMaxExponent, 0, 30));
         long exponential = baseDelay > (30_000L >> exponent) ? 30_000L : baseDelay << exponent;
         long capped = Math.min(30_000L, exponential);
         long lower = Math.max(1L, Math.round(capped * 0.8d));
-        long upper = Math.max(lower, Math.min(30_000L, Math.round(capped * 1.2d)));
+        long upper = Math.clamp(Math.round(capped * 1.2d), lower, 30_000L);
         return ThreadLocalRandom.current().nextLong(lower, upper + 1L);
     }
 
@@ -414,25 +415,29 @@ public class LiveDataImpl implements LiveData {
                 future.completeExceptionally(new TimeoutException("Start live stream timed out after " + timeout + "s"));
             }, timeout, TimeUnit.SECONDS);
 
-            com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
-                    new com.google.common.util.concurrent.FutureCallback<>() {
-                        @Override
-                        public void onSuccess(CommandResponse result) {
-                            timeoutTask.cancel(false);
-                            future.complete(result);
-                        }
-
-                        @Override
-                        public void onFailure(Throwable t) {
-                            timeoutTask.cancel(false);
-                            future.completeExceptionally(t);
-                        }
-                    },
-                    unaryCallbackExecutor
-            );
-
-            return future;
+            return getCommandResponseCompletableFuture(future, listenableFuture, timeoutTask);
         });
+    }
+
+    private CompletableFuture<CommandResponse> getCommandResponseCompletableFuture(CompletableFuture<CommandResponse> future, ListenableFuture<CommandResponse> listenableFuture, ScheduledFuture<?> timeoutTask) {
+        com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
+                new com.google.common.util.concurrent.FutureCallback<>() {
+                    @Override
+                    public void onSuccess(CommandResponse result) {
+                        timeoutTask.cancel(false);
+                        future.complete(result);
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Throwable t) {
+                        timeoutTask.cancel(false);
+                        future.completeExceptionally(t);
+                    }
+                },
+                unaryCallbackExecutor
+        );
+
+        return future;
     }
 
     /**
@@ -457,24 +462,7 @@ public class LiveDataImpl implements LiveData {
                 future.completeExceptionally(new TimeoutException("Stop live stream timed out after " + timeout + "s"));
             }, timeout, TimeUnit.SECONDS);
 
-            com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
-                    new com.google.common.util.concurrent.FutureCallback<>() {
-                        @Override
-                        public void onSuccess(CommandResponse result) {
-                            timeoutTask.cancel(false);
-                            future.complete(result);
-                        }
-
-                        @Override
-                        public void onFailure(Throwable t) {
-                            timeoutTask.cancel(false);
-                            future.completeExceptionally(t);
-                        }
-                    },
-                    unaryCallbackExecutor
-            );
-
-            return future;
+            return getCommandResponseCompletableFuture(future, listenableFuture, timeoutTask);
         });
     }
 
@@ -494,24 +482,7 @@ public class LiveDataImpl implements LiveData {
                 future.completeExceptionally(new TimeoutException("Change lens timed out after " + timeout + "s"));
             }, timeout, TimeUnit.SECONDS);
 
-            com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
-                    new com.google.common.util.concurrent.FutureCallback<>() {
-                        @Override
-                        public void onSuccess(CommandResponse result) {
-                            timeoutTask.cancel(false);
-                            future.complete(result);
-                        }
-
-                        @Override
-                        public void onFailure(Throwable t) {
-                            timeoutTask.cancel(false);
-                            future.completeExceptionally(t);
-                        }
-                    },
-                    unaryCallbackExecutor
-            );
-
-            return future;
+            return getCommandResponseCompletableFuture(future, listenableFuture, timeoutTask);
         });
     }
 
@@ -531,24 +502,7 @@ public class LiveDataImpl implements LiveData {
                 future.completeExceptionally(new TimeoutException("Change zoom timed out after " + timeout + "s"));
             }, timeout, TimeUnit.SECONDS);
 
-            com.google.common.util.concurrent.Futures.addCallback(listenableFuture,
-                    new com.google.common.util.concurrent.FutureCallback<>() {
-                        @Override
-                        public void onSuccess(CommandResponse result) {
-                            timeoutTask.cancel(false);
-                            future.complete(result);
-                        }
-
-                        @Override
-                        public void onFailure(Throwable t) {
-                            timeoutTask.cancel(false);
-                            future.completeExceptionally(t);
-                        }
-                    },
-                    unaryCallbackExecutor
-            );
-
-            return future;
+            return getCommandResponseCompletableFuture(future, listenableFuture, timeoutTask);
         });
     }
 
