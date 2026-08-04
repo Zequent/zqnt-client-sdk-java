@@ -39,6 +39,7 @@ public class RemoteControlImpl implements RemoteControl {
 	private final GrpcClientConfig config;
 	private final ScheduledExecutorService timeoutScheduler;
 	private final CustomCommandMapper customCommandMapper = new CustomCommandMapper();
+	private final CapabilityMapper capabilityMapper = new CapabilityMapper();
 
 	/**
 	 * Private constructor - use create() factory method.
@@ -371,12 +372,32 @@ public class RemoteControlImpl implements RemoteControl {
 	}
 
 	@Override
+	public CompletableFuture<CapabilitySnapshot> getCapabilities(String sn) {
+		validateSn(sn);
+		AssetCapabilitiesRequest request = AssetCapabilitiesRequest.newBuilder()
+				.setSn(sn).setBase(buildBase(sn)).build();
+		return executeCapabilitiesAsync(observer -> asyncStub.getCapabilities(request, observer))
+				.thenApply(capabilityMapper::fromProto);
+	}
+
+	@Override
 	public CompletableFuture<com.zqnt.sdk.client.remotecontrol.domains.CustomCommandResponse> sendCustomCommand(
 			com.zqnt.sdk.client.remotecontrol.domains.CustomCommandRequest request) {
 		var protoRequest = customCommandMapper.toProto(request);
 
 		return executeCustomCommandAsync(observer -> asyncStub.sendCustomCommand(protoRequest, observer))
 				.thenApply(proto -> customCommandMapper.fromProto(proto, request.getSn()));
+	}
+
+	private CompletableFuture<AssetCapabilitiesResponse> executeCapabilitiesAsync(
+			java.util.function.Consumer<StreamObserver<AssetCapabilitiesResponse>> stubCall) {
+		CompletableFuture<AssetCapabilitiesResponse> future = new CompletableFuture<>();
+		stubCall.accept(new StreamObserver<>() {
+			@Override public void onNext(AssetCapabilitiesResponse value) { future.complete(value); }
+			@Override public void onError(Throwable error) { future.completeExceptionally(error); }
+			@Override public void onCompleted() { }
+		});
+		return future;
 	}
 
 	private static void validateSn(String sn) {

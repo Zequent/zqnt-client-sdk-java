@@ -4,6 +4,7 @@ import com.zqnt.sdk.client.connector.domains.ConnectorRequestContext;
 import com.zqnt.sdk.client.connector.domains.StoreDetectionRequest;
 import com.zqnt.sdk.client.connector.domains.StoreNotificationRequest;
 import com.zqnt.sdk.client.connector.domains.StoreTelemetryRequest;
+import com.zqnt.utils.common.proto.AssetPayloadProtoDTO;
 import com.zqnt.utils.common.proto.AssetProtoDTO;
 import com.zqnt.utils.connector.proto.TelemetryType;
 import com.zqnt.utils.detections.domains.DetectionDTO;
@@ -21,6 +22,23 @@ import static org.junit.jupiter.api.Assertions.*;
 class ConnectorMapperTest {
 
     private final ConnectorMapper mapper = new ConnectorMapper();
+
+    @Test
+    void mapsPayloadInventoryWithoutDuplicatingCapabilityContracts() {
+        var proto = com.zqnt.utils.connector.proto.AssetPayloadListResponse.newBuilder()
+                .addPayloads(AssetPayloadProtoDTO.newBuilder()
+                        .setExternalId("parachute-1")
+                        .setKind("PARACHUTE")
+                        .setStateJson("{\"armed\":true}")
+                        .setActive(true))
+                .build();
+
+        var payload = mapper.payloadListResponse(proto).getPayloads().getFirst();
+
+        assertEquals("parachute-1", payload.getExternalId());
+        assertEquals("PARACHUTE", payload.getKind());
+        assertEquals(true, payload.getState().get("armed"));
+    }
 
     @Test
     void mapsPojoContextToInternalRequestBase() {

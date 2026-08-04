@@ -2,6 +2,8 @@ package com.zqnt.sdk.client.remotecontrol.application.impl;
 
 import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
+import com.zqnt.sdk.client.remotecontrol.domains.CapabilityDescriptor;
+import com.zqnt.sdk.client.remotecontrol.domains.CapabilityTargetType;
 import com.zqnt.sdk.client.remotecontrol.domains.CustomCommandRequest;
 import com.zqnt.utils.common.proto.ResponseMeta;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,25 @@ import static org.junit.jupiter.api.Assertions.*;
 class CustomCommandMapperTest {
 
     private final CustomCommandMapper mapper = new CustomCommandMapper();
+
+    @Test
+    void mapsCapabilityTargetIntoCustomCommand() {
+        var capability = CapabilityDescriptor.builder()
+                .commandId("parachute.led.set")
+                .targetType(CapabilityTargetType.PAYLOAD)
+                .targetRef("payload:flyfire-1")
+                .build();
+
+        var proto = mapper.toProto(CustomCommandRequest.forCapability(
+                "dock-sn", capability, Map.of("value", 1)));
+
+        assertEquals("parachute.led.set", proto.getCommandId());
+        assertEquals("payload:flyfire-1", proto.getTarget().getTargetRef());
+        assertEquals(com.zqnt.utils.devicecontrol.proto.CapabilityTargetType
+                .CAPABILITY_TARGET_TYPE_PAYLOAD, proto.getTarget().getType());
+        assertEquals(1d, proto.getParams().getFieldsOrThrow("value").getNumberValue());
+        assertFalse(proto.getParams().containsFields("index"));
+    }
 
     @Test
     void mapsPojoCommandAndNestedParametersToProto() {

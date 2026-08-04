@@ -1,6 +1,7 @@
 package com.zqnt.sdk.client.connector.application.impl;
 
 import com.google.protobuf.FieldMask;
+import com.google.protobuf.Struct;
 import com.google.protobuf.Timestamp;
 import com.zqnt.sdk.client.connector.domains.*;
 import com.zqnt.sdk.client.missionautonomy.application.impl.MissionAutonomyImpl;
@@ -556,7 +557,7 @@ final class ConnectorMapper {
                 .firmwareVersion(proto.hasFirmwareVersion() ? proto.getFirmwareVersion() : null)
                 .libraryVersion(proto.hasLibraryVersion() ? proto.getLibraryVersion() : null)
                 .state(jsonMap(proto.hasStateJson() ? proto.getStateJson() : null))
-                .commands(List.of()).active(proto.getActive())
+                .active(proto.getActive())
                 .lastSeenAt(proto.hasLastSeenAt() ? time(proto.getLastSeenAt()) : null)
                 .createdAt(proto.hasCreatedAt() ? time(proto.getCreatedAt()) : null)
                 .modifiedAt(proto.hasModifiedAt() ? time(proto.getModifiedAt()) : null)
@@ -588,6 +589,15 @@ final class ConnectorMapper {
     @SuppressWarnings("unchecked")
     private Map<String, Object> jsonMap(String json) {
         return json == null || json.isBlank() ? Collections.emptyMap() : JsonUtils.fromJson(json, Map.class);
+    }
+
+    private Struct struct(Map<String, Object> value) {
+        return (Struct) ProtoJsonUtils.fromJson(JsonUtils.toJson(value), Struct.newBuilder());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> map(Struct value) {
+        return JsonUtils.fromJson(ProtoJsonUtils.toJson(value), Map.class);
     }
 
     private <T> void set(java.util.function.Consumer<T> setter, T value) {

@@ -79,33 +79,43 @@ public class DroneService {
 }
 ```
 
-Payload commands use the stable logical command advertised by the Connector; vendor methods stay internal to the edge adapter:
+### Dynamic payload commands
+
+Dynamic payload commands run through `remoteControl()`. Discover the current capabilities first:
+their target reference is the authoritative routing value for the command.
+
+The client flow is:
+
+1. Call `remoteControl().getCapabilities(dockSn)`.
+2. Select the advertised logical command.
+3. Build the request with `CustomCommandRequest.forCapability(...)` so its `targetRef` is retained.
+4. Send the command and check `CustomCommandResponse.success`, `error`, and `result`.
+
+The `vendorMethod` from the discovered definition is intentionally not sent by the client. The edge
+adapter resolves the stable logical command to the vendor-specific implementation.
 
 ```java
-return zequent.connector().getAssetBySn(
-        GetAssetBySnRequest.builder().context(context).build()
-).thenCompose(assetResponse -> {
-    AssetPayloadDTO payload = assetResponse.getAsset().getPayloads().stream()
-            .filter(value -> "searchlight-1".equals(value.getExternalId()))
-            .findFirst()
-            .orElseThrow(() -> new IllegalStateException("Payload is not registered"));
+String dockSn = "YOUR_DOCK_SN";
 
-    PayloadCommandDefinitionDTO command = payload.getCommands().stream()
-            .filter(value -> "searchlight.mode.set".equals(value.getCommand()))
-            .filter(value -> Boolean.TRUE.equals(value.getAvailable()))
+return zequent.remoteControl().getCapabilities(dockSn).thenCompose(snapshot -> {
+    var capability = snapshot.getCapabilities().stream()
+            .filter(value -> "parachute.led.set".equals(value.getCommandId()))
             .findFirst()
-            .orElseThrow(() -> new IllegalStateException("Command is not available"));
+            .orElseThrow(() -> new IllegalStateException("Parachute capability is unavailable"));
 
-    return zequent.remoteControl().sendCustomCommand(CustomCommandRequest.builder()
-            .sn(sn)
-            .componentId(payload.getExternalId())
-            .commandType(command.getCommand())
-            .params(Map.of("mode", 1, "group", 0))
-            .build());
+    // value: 1 = on, 0 = off. Widget index 1 is added by the adapter.
+    return zequent.remoteControl().sendCustomCommand(
+            CustomCommandRequest.forCapability(dockSn, capability, Map.of("value", 1)));
 });
 ```
 
-The edge adapter resolves `commandType` to its registered `vendorMethod` and validates the payload again before execution.
+If `parachute.led.set` is absent, the payload was not recognized as `PARACHUTE`; its current PSDK
+name must contain `flyfire` or `parachute`.
+
+The complete executable example is
+[`PayloadCustomCommandIntegrationTest`](src/test/java/com/zqnt/sdk/client/PayloadCustomCommandIntegrationTest.java).
+Its first test only discovers and constructs the request. The second test changes hardware state and
+therefore runs only with `-Dpayload.command.execution.enabled=true`.
 
 **That's it!** The SDK auto-configures via `ZequentClientProducer` (CDI).
 

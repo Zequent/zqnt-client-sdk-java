@@ -36,10 +36,21 @@ final class CustomCommandMapper {
                 .setParams(mapToStruct(request.getParams()));
         if (hasText(request.getComponentId())) {
             builder.setTarget(CapabilityTarget.newBuilder()
-                    .setType(CapabilityTargetType.CAPABILITY_TARGET_TYPE_COMPONENT)
+                    .setType(toProto(request.getTargetType()))
                     .setTargetRef(request.getComponentId()));
         }
         return builder.build();
+    }
+
+    private CapabilityTargetType toProto(
+            com.zqnt.sdk.client.remotecontrol.domains.CapabilityTargetType type) {
+        if (type == null) return CapabilityTargetType.CAPABILITY_TARGET_TYPE_PAYLOAD;
+        return switch (type) {
+            case ASSET -> CapabilityTargetType.CAPABILITY_TARGET_TYPE_ASSET;
+            case SUB_ASSET -> CapabilityTargetType.CAPABILITY_TARGET_TYPE_SUB_ASSET;
+            case PAYLOAD -> CapabilityTargetType.CAPABILITY_TARGET_TYPE_PAYLOAD;
+            case COMPONENT -> CapabilityTargetType.CAPABILITY_TARGET_TYPE_COMPONENT;
+        };
     }
 
     CustomCommandResponse fromProto(com.zqnt.utils.devicecontrol.proto.CustomCommandResponse proto, String sn) {

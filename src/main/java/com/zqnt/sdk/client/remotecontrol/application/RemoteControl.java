@@ -32,5 +32,6 @@ public interface RemoteControl {
     CompletableFuture<RemoteControlResponse> takePhoto(DockOperationRequest request);
 
     // Payload / integrator-defined commands
+    CompletableFuture<CapabilitySnapshot> getCapabilities(String sn);
     CompletableFuture<CustomCommandResponse> sendCustomCommand(CustomCommandRequest request);
 }
