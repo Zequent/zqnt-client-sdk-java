@@ -21,7 +21,6 @@ import com.zqnt.utils.events.proto.*;
 import com.zqnt.utils.mission.proto.*;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
-import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 import com.zqnt.utils.missionautonomy.domains.WaypointDTO;
 
 import java.time.LocalDateTime;
@@ -138,8 +137,7 @@ final class ConnectorMapper {
         var builder = UploadMissionNfzZonesRequest.newBuilder().setBase(base(request.getContext()))
                 .setMissionId(request.getMissionId()).setReplaceExisting(request.isReplaceExisting());
         if (request.getZones() != null) request.getZones().stream()
-                .map(zone -> (MissionZoneProtoDTO) ProtoJsonUtils.fromJson(
-                        JsonUtils.toJson(zone), MissionZoneProtoDTO.newBuilder()))
+                .map(MissionAutonomyImpl::mapMissionZoneDtoToProto)
                 .forEach(builder::addZones);
         return builder.build();
     }
@@ -447,7 +445,7 @@ final class ConnectorMapper {
                         .timestamp(time(proto.getError().getTimestamp())).build() : null)
                 .progress(proto.hasProgress() ? TaskResponse.ProgressInfo.builder().progress(proto.getProgress().getProgress())
                         .state(proto.getProgress().getState()).leftTimeInSeconds(proto.getProgress().getLeftTimeInSeconds()).build() : null)
-                .taskData(proto.hasTask() ? JsonUtils.fromJson(ProtoJsonUtils.toJson(proto.getTask()), TaskDTO.class) : null)
+                .taskData(proto.hasTask() ? MissionAutonomyImpl.mapTaskProtoToDto(proto.getTask()) : null)
                 .build();
     }
 

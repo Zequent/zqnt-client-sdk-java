@@ -30,6 +30,7 @@ public interface RemoteControl {
     CompletableFuture<RemoteControlResponse> debugMode(DockOperationRequest request);
     CompletableFuture<RemoteControlResponse> changeAcMode(DockOperationRequest request);
     CompletableFuture<RemoteControlResponse> takePhoto(DockOperationRequest request);
+    CompletableFuture<RemoteControlResponse> liveStreamSplitScreen(LiveStreamSplitScreenRequest request);
 
     // Payload / integrator-defined commands
     CompletableFuture<CapabilitySnapshot> getCapabilities(String sn);

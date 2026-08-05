@@ -9,7 +9,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * Für Integration-Tests siehe ZequentClientIntegrationTest.
  */
 @Tag("unit")
-@EnabledIfSystemProperty(named = "integration.tests.enabled", matches = "true")
 class ZequentClientTest {
 
 	private ZequentClient client;

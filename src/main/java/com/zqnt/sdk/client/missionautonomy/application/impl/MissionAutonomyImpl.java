@@ -12,6 +12,7 @@ import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.mission.proto.*;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
+import com.zqnt.utils.missionautonomy.domains.MissionZoneDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 import com.zqnt.utils.missionautonomy.domains.config.*;
@@ -164,11 +165,15 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
         if (missionDTO.getZones() != null) {
             missionBuilder.addAllZones(missionDTO.getZones().stream()
-                    .map(zone -> (MissionZoneProtoDTO) ProtoJsonUtils.fromJson(
-                            JsonUtils.toJson(zone), MissionZoneProtoDTO.newBuilder()))
+                    .map(MissionAutonomyImpl::mapMissionZoneDtoToProto)
                     .toList());
         }
         return missionBuilder;
+    }
+
+    public static MissionZoneProtoDTO mapMissionZoneDtoToProto(MissionZoneDTO zone) {
+        return (MissionZoneProtoDTO) ProtoJsonUtils.fromJson(
+                JsonUtils.toJson(zone), MissionZoneProtoDTO.newBuilder());
     }
 
     @Override
@@ -195,6 +200,45 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
         return executeAsync(() -> futureStub.deleteMission(protoRequest))
                 .thenApply(this::toMissionResponse);
+    }
+
+    @Override
+    public CompletableFuture<MissionResponse> uploadMissionNfzZones(
+            String missionId, List<MissionZoneDTO> zones, boolean replaceExisting) {
+        log.info("Uploading mission NFZ zones: missionId={}, count={}, replaceExisting={}",
+                missionId, zones != null ? zones.size() : 0, replaceExisting);
+
+        var protoRequest = mapUploadMissionNfzZonesRequest(
+                buildBase(), missionId, zones, replaceExisting);
+
+        return executeAsync(() -> futureStub.uploadMissionNfzZones(protoRequest))
+                .thenApply(this::toMissionResponse);
+    }
+
+    static UploadMissionNfzZonesRequest mapUploadMissionNfzZonesRequest(
+            RequestBase base, String missionId, List<MissionZoneDTO> zones, boolean replaceExisting) {
+        if (missionId == null || missionId.isBlank()) {
+            throw new IllegalArgumentException("missionId must not be null or blank");
+        }
+        if (zones == null) {
+            throw new IllegalArgumentException("zones must not be null");
+        }
+        for (int index = 0; index < zones.size(); index++) {
+            MissionZoneDTO zone = zones.get(index);
+            if (zone == null) {
+                throw new IllegalArgumentException("zones[" + index + "] must not be null");
+            }
+            zone.validate();
+        }
+
+        return UploadMissionNfzZonesRequest.newBuilder()
+                .setBase(base)
+                .setMissionId(missionId)
+                .addAllZones(zones.stream()
+                        .map(MissionAutonomyImpl::mapMissionZoneDtoToProto)
+                        .toList())
+                .setReplaceExisting(replaceExisting)
+                .build();
     }
 
     @Override
@@ -480,7 +524,6 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .thenApply(this::toSchedulerResponse);
     }
 
-    //TODO finish up implemetation on client sdk side for new endpoints
     @Override
     public CompletableFuture<SchedulerResponse> createSchedulers(List<SchedulerDTO> schedulerDTOS) {
         log.info("Creating schedulers: count={}", schedulerDTOS.size());
@@ -489,7 +532,6 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .addAllSchedulers(schedulerDTOS.stream().map(this::toSchedulerProtoDTO)
                 .collect(Collectors.toList()))
                 .build();
-
         return executeAsync(() -> futureStub.createSchedulers(protoRequest))
                 .thenApply(this::toSchedulerResponse);
     }
@@ -645,11 +687,34 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         }
 
         if (proto.hasTask()) {
-            var json = ProtoJsonUtils.toJson(proto.getTask());
-            builder.taskData(JsonUtils.fromJson(json, TaskDTO.class));
+            builder.taskData(mapTaskProtoToDto(proto.getTask()));
         }
 
         return builder.build();
+    }
+
+    public static TaskDTO mapTaskProtoToDto(TaskProtoDTO proto) {
+        TaskDTO task = JsonUtils.fromJson(ProtoJsonUtils.toJson(proto), TaskDTO.class);
+        if (proto.hasWaypointConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getWaypointConfig()), WaypointTaskConfig.class));
+        } else if (proto.hasDetectConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getDetectConfig()), DetectTaskConfig.class));
+        } else if (proto.hasAreaMappingConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getAreaMappingConfig()), AreaMappingTaskConfig.class));
+        } else if (proto.hasPoiConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getPoiConfig()), PoiTaskConfig.class));
+        } else if (proto.hasFollowConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getFollowConfig()), FollowTaskConfig.class));
+        } else if (proto.hasTrackConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getTrackConfig()), TrackTaskConfig.class));
+        }
+        return task;
     }
 
     private SchedulerResponse toSchedulerResponse(com.zqnt.utils.mission.proto.SchedulerResponse proto) {

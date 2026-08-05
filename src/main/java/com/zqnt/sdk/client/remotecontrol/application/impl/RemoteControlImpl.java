@@ -372,6 +372,20 @@ public class RemoteControlImpl implements RemoteControl {
 	}
 
 	@Override
+	public CompletableFuture<RemoteControlResponse> liveStreamSplitScreen(LiveStreamSplitScreenRequest request) {
+		validateSn(request.getSn());
+		log.info("LiveStreamSplitScreen: sn={}, enabled={}", request.getSn(), request.isEnabled());
+
+		var protoRequest = ToggleCommandRequest.newBuilder()
+				.setBase(buildBase(request.getSn(), request.getAssetId()))
+				.setEnabled(request.isEnabled())
+				.build();
+
+		return executeAsync(observer -> asyncStub.liveStreamSplitScreen(protoRequest, observer))
+				.thenApply(proto -> toResponse(proto, request.getSn()));
+	}
+
+	@Override
 	public CompletableFuture<CapabilitySnapshot> getCapabilities(String sn) {
 		validateSn(sn);
 		AssetCapabilitiesRequest request = AssetCapabilitiesRequest.newBuilder()
@@ -425,10 +439,17 @@ public class RemoteControlImpl implements RemoteControl {
 	}
 
 	private com.zqnt.utils.common.proto.RequestBase buildBase(String sn) {
+		return buildBase(sn, null);
+	}
+
+	private com.zqnt.utils.common.proto.RequestBase buildBase(String sn, String assetId) {
 		var builder = RequestBase.newBuilder()
 				.setSn(sn)
 				.setTid(UUID.randomUUID().toString())
 				.setTimestamp(ProtobufHelpers.now());
+		if (assetId != null && !assetId.isBlank()) {
+			builder.setAssetId(assetId);
+		}
 
 		return builder.build();
 	}

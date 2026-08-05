@@ -38,7 +38,8 @@ class PayloadCustomCommandIntegrationTest {
     private static final String DOCK_SN = System.getProperty(
             "payload.test.sn", "8UUXN2Q00A01FZ");
     private static final String COMMAND = "parachute.led.set";
-    private static final boolean EXECUTION_ENABLED = true;
+    private static final boolean EXECUTION_ENABLED = Boolean.getBoolean(
+            "payload.command.execution.enabled");
     private static final long LED_ON_MILLIS = Long.getLong(
             "payload.test.led-on-millis", 40_000L);
 
