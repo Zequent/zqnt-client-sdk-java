@@ -8,9 +8,7 @@ import com.zqnt.sdk.client.connector.application.Connector;
 import com.zqnt.sdk.client.connector.domains.*;
 import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.livedata.domains.StreamHandle;
-import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
-import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
 import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.connector.proto.ConnectorServiceGrpc;
 import io.grpc.ManagedChannel;
@@ -91,39 +89,6 @@ public final class ConnectorImpl implements Connector {
     @Override public CompletableFuture<ConnectorResponse> getOrganization(GetOrganizationRequest request) {
         return execute(() -> futureStub.getOrganization(mapper.organization(ConnectorRequestValidator.validate(request)))).thenApply(mapper::connectorResponse);
     }
-    @Override public CompletableFuture<MissionResponse> getMission(GetMissionRequest request) {
-        return execute(() -> futureStub.getMission(mapper.getMission(ConnectorRequestValidator.validate(request)))).thenApply(mapper::missionResponse);
-    }
-    @Override public CompletableFuture<MissionResponse> createMission(CreateMissionRequest request) {
-        return execute(() -> futureStub.createMission(mapper.createMission(ConnectorRequestValidator.validate(request)))).thenApply(mapper::missionResponse);
-    }
-    @Override public CompletableFuture<MissionResponse> updateMission(UpdateMissionRequest request) {
-        return execute(() -> futureStub.updateMission(mapper.updateMission(ConnectorRequestValidator.validate(request)))).thenApply(mapper::missionResponse);
-    }
-    @Override public CompletableFuture<MissionResponse> deleteMission(DeleteMissionRequest request) {
-        return execute(() -> futureStub.deleteMission(mapper.deleteMission(ConnectorRequestValidator.validate(request)))).thenApply(mapper::missionResponse);
-    }
-    @Override public CompletableFuture<MissionResponse> uploadMissionNfzZones(UploadMissionZonesRequest request) {
-        return execute(() -> futureStub.uploadMissionNfzZones(mapper.uploadZones(ConnectorRequestValidator.validate(request)))).thenApply(mapper::missionResponse);
-    }
-    @Override public CompletableFuture<TaskResponse> getTask(GetTaskRequest request) {
-        return execute(() -> futureStub.getTask(mapper.getTask(ConnectorRequestValidator.validate(request)))).thenApply(mapper::taskResponse);
-    }
-    @Override public CompletableFuture<TaskResponse> getTaskByFlightId(GetTaskByFlightIdRequest request) {
-        return execute(() -> futureStub.getTaskByFlightId(mapper.getTaskByFlightId(ConnectorRequestValidator.validate(request)))).thenApply(mapper::taskResponse);
-    }
-    @Override public CompletableFuture<WaypointsResponse> getWaypointsByTaskId(GetWaypointsByTaskIdRequest request) {
-        return execute(() -> futureStub.getWaypointsByTaskId(mapper.getWaypoints(ConnectorRequestValidator.validate(request)))).thenApply(mapper::waypointsResponse);
-    }
-    @Override public CompletableFuture<TaskResponse> createTask(CreateTaskRequest request) {
-        return execute(() -> futureStub.createTask(mapper.createTask(ConnectorRequestValidator.validate(request)))).thenApply(mapper::taskResponse);
-    }
-    @Override public CompletableFuture<TaskResponse> updateTask(UpdateTaskRequest request) {
-        return execute(() -> futureStub.updateTask(mapper.updateTask(ConnectorRequestValidator.validate(request)))).thenApply(mapper::taskResponse);
-    }
-    @Override public CompletableFuture<TaskResponse> deleteTask(DeleteTaskRequest request) {
-        return execute(() -> futureStub.deleteTask(mapper.deleteTask(ConnectorRequestValidator.validate(request)))).thenApply(mapper::taskResponse);
-    }
     @Override public CompletableFuture<SchedulerResponse> getScheduler(GetSchedulerRequest request) {
         return execute(() -> futureStub.getScheduler(mapper.getScheduler(ConnectorRequestValidator.validate(request)))).thenApply(mapper::schedulerResponse);
     }
@@ -141,9 +106,6 @@ public final class ConnectorImpl implements Connector {
     }
     @Override public CompletableFuture<SchedulerResponse> deleteSchedulers(DeleteSchedulersRequest request) {
         return execute(() -> futureStub.deleteSchedulers(mapper.deleteSchedulers(ConnectorRequestValidator.validate(request)))).thenApply(mapper::schedulerResponse);
-    }
-    @Override public CompletableFuture<SchedulerResponse> deleteSchedulersByTask(DeleteSchedulersByTaskRequest request) {
-        return execute(() -> futureStub.deleteSchedulersByTask(mapper.deleteSchedulersByTask(ConnectorRequestValidator.validate(request)))).thenApply(mapper::schedulerResponse);
     }
     @Override public CompletableFuture<ConnectorPolicyResponse> getActivePoliciesByType(GetPoliciesRequest request) {
         return execute(() -> futureStub.getActivePoliciesByType(mapper.policies(ConnectorRequestValidator.validate(request)))).thenApply(mapper::policyResponse);

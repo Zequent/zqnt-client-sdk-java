@@ -3,6 +3,7 @@ package com.zqnt.sdk.client.missionautonomy.application.impl;
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
+import com.zqnt.sdk.client.missionautonomy.capabilities.*;
 import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
@@ -10,6 +11,7 @@ import com.zqnt.utils.JsonUtils;
 import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
+import com.zqnt.utils.execution.proto.*;
 import com.zqnt.utils.mission.proto.*;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.MissionZoneDTO;
@@ -77,6 +79,223 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         return new MissionAutonomyImpl(config, channel);
     }
 
+    @Override
+    public CompletableFuture<CapabilityPackageProtoDTO> upsertCapabilityPackage(
+            CapabilityPackageProtoDTO capabilityPackage, String expectedRevision) {
+        if (capabilityPackage == null) throw new IllegalArgumentException("capabilityPackage must not be null");
+        if (capabilityPackage.getId().isBlank()) throw new IllegalArgumentException("package id must not be blank");
+        if (capabilityPackage.getVersion().isBlank()) throw new IllegalArgumentException("package version must not be blank");
+        var request = UpsertCapabilityPackageRequest.newBuilder().setBase(buildBase())
+                .setPackage(capabilityPackage);
+        setIfPresent(expectedRevision, request::setExpectedRevision);
+        return executeAsync(() -> futureStub.upsertCapabilityPackage(request.build()))
+                .thenApply(this::requirePackage);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityPackageProtoDTO> getCapabilityPackage(String packageId, String version) {
+        var request = GetCapabilityPackageRequest.newBuilder().setBase(buildBase())
+                .setPackageId(requireText(packageId, "packageId"));
+        setIfPresent(version, request::setVersion);
+        return executeAsync(() -> futureStub.getCapabilityPackage(request.build()))
+                .thenApply(this::requirePackage);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityPage<CapabilityPackageProtoDTO>> listCapabilityPackages(
+            CapabilityPackageQuery query) {
+        CapabilityPackageQuery safe = query == null ? CapabilityPackageQuery.firstPage() : query;
+        var request = ListCapabilityPackagesRequest.newBuilder().setBase(buildBase());
+        if (safe.scope() != null) request.setScope(safe.scope());
+        if (safe.enabledOnly() != null) request.setEnabledOnly(safe.enabledOnly());
+        if (safe.pageSize() != null) request.setPageSize(safe.pageSize());
+        setIfPresent(safe.pageToken(), request::setPageToken);
+        return executeAsync(() -> futureStub.listCapabilityPackages(request.build())).thenApply(response -> {
+            requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
+                    response.getMeta().getTid());
+            if (!response.hasResult()) return new CapabilityPage<>(List.of(), "");
+            return new CapabilityPage<>(response.getResult().getPackagesList(),
+                    response.getResult().hasNextPageToken() ? response.getResult().getNextPageToken() : "");
+        });
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteCapabilityPackage(String packageId, String version,
+            String expectedRevision) {
+        var request = DeleteCapabilityPackageRequest.newBuilder().setBase(buildBase())
+                .setPackageId(requireText(packageId, "packageId"));
+        setIfPresent(version, request::setVersion);
+        setIfPresent(expectedRevision, request::setExpectedRevision);
+        return executeAsync(() -> futureStub.deleteCapabilityPackage(request.build())).thenApply(response -> {
+            requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
+                    response.getMeta().getTid());
+            return null;
+        });
+    }
+
+    @Override
+    public CompletableFuture<CapabilityExecutionProtoDTO> createCapabilityExecution(
+            CapabilityExecutionCommand command) {
+        var request = createExecutionRequest(command);
+        return executeAsync(() -> futureStub.createCapabilityExecution(request)).thenApply(this::requireExecution);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityExecutionProtoDTO> executeCapability(CapabilityExecutionCommand command) {
+        requireCommand(command);
+        var request = ExecuteCapabilityRequest.newBuilder().setBase(buildBase(command.assetSn()))
+                .setSpec(command.spec()).setOptions(command.options()).setIdempotencyKey(command.idempotencyKey());
+        applyScope(command, request::setOrganizationId, request::setLocationId, request::setTheatreId);
+        return executeAsync(() -> futureStub.executeCapability(request.build())).thenApply(this::requireExecution);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityExecutionProtoDTO> getCapabilityExecution(String executionId) {
+        var request = GetCapabilityExecutionRequest.newBuilder().setBase(buildBase())
+                .setExecutionId(requireText(executionId, "executionId")).build();
+        return executeAsync(() -> futureStub.getCapabilityExecution(request)).thenApply(this::requireExecution);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityPage<CapabilityExecutionProtoDTO>> listCapabilityExecutions(
+            CapabilityExecutionQuery query) {
+        CapabilityExecutionQuery safe = query == null ? CapabilityExecutionQuery.firstPage() : query;
+        var request = ListCapabilityExecutionsRequest.newBuilder().setBase(buildBase());
+        setIfPresent(safe.assetSn(), request::setAssetSn);
+        setIfPresent(safe.organizationId(), request::setOrganizationId);
+        if (safe.status() != null) request.setStatus(safe.status());
+        setIfPresent(safe.packageId(), request::setPackageId);
+        setIfPresent(safe.capabilityId(), request::setCapabilityId);
+        setIfPresent(safe.theatreId(), request::setTheatreId);
+        if (safe.pageSize() != null) request.setPageSize(safe.pageSize());
+        setIfPresent(safe.pageToken(), request::setPageToken);
+        return executeAsync(() -> futureStub.listCapabilityExecutions(request.build())).thenApply(response -> {
+            requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
+                    response.getMeta().getTid());
+            if (!response.hasResult()) return new CapabilityPage<>(List.of(), "");
+            return new CapabilityPage<>(response.getResult().getExecutionsList(),
+                    response.getResult().hasNextPageToken() ? response.getResult().getNextPageToken() : "");
+        });
+    }
+
+    @Override
+    public CompletableFuture<CapabilityExecutionProtoDTO> startCapabilityExecution(
+            CapabilityLifecycleCommand command) {
+        var request = lifecycleRequest(command);
+        return executeAsync(() -> futureStub.startCapabilityExecution(request)).thenApply(this::requireExecution);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityExecutionProtoDTO> pauseCapabilityExecution(
+            CapabilityLifecycleCommand command) {
+        var request = lifecycleRequest(command);
+        return executeAsync(() -> futureStub.pauseCapabilityExecution(request)).thenApply(this::requireExecution);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityExecutionProtoDTO> resumeCapabilityExecution(
+            CapabilityLifecycleCommand command) {
+        var request = lifecycleRequest(command);
+        return executeAsync(() -> futureStub.resumeCapabilityExecution(request)).thenApply(this::requireExecution);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityExecutionProtoDTO> cancelCapabilityExecution(
+            CapabilityLifecycleCommand command) {
+        var request = lifecycleRequest(command);
+        return executeAsync(() -> futureStub.cancelCapabilityExecution(request)).thenApply(this::requireExecution);
+    }
+
+    @Override
+    public CompletableFuture<CapabilityExecutionProtoDTO> signalCapabilityExecution(CapabilitySignalCommand command) {
+        if (command == null) throw new IllegalArgumentException("command must not be null");
+        var request = SignalCapabilityExecutionRequest.newBuilder().setBase(buildBase())
+                .setExecutionId(command.executionId()).setData(command.data());
+        setIfPresent(command.nodeId(), request::setNodeId);
+        setIfPresent(command.eventType(), request::setEventType);
+        if (command.approved() != null) request.setApproved(command.approved());
+        setIfPresent(command.idempotencyKey(), request::setIdempotencyKey);
+        return executeAsync(() -> futureStub.signalCapabilityExecution(request.build()))
+                .thenApply(this::requireExecution);
+    }
+
+    @Override
+    public CompletableFuture<ResolvedExecutionConfigProtoDTO> resolveExecutionConfig(ExecutionConfigQuery query) {
+        if (query == null) throw new IllegalArgumentException("query must not be null");
+        var request = ResolveExecutionConfigRequest.newBuilder().setBase(buildBase(query.assetSn()))
+                .setContext(query.context()).addAllKeys(query.keys()).build();
+        return executeAsync(() -> futureStub.resolveExecutionConfig(request)).thenApply(response -> {
+            requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
+                    response.getMeta().getTid());
+            if (!response.hasConfig()) throw malformed("Missing resolved configuration", response.getMeta().getTid());
+            return response.getConfig();
+        });
+    }
+
+    private CreateCapabilityExecutionRequest createExecutionRequest(CapabilityExecutionCommand command) {
+        requireCommand(command);
+        var request = CreateCapabilityExecutionRequest.newBuilder().setBase(buildBase(command.assetSn()))
+                .setSpec(command.spec()).setOptions(command.options()).setIdempotencyKey(command.idempotencyKey());
+        applyScope(command, request::setOrganizationId, request::setLocationId, request::setTheatreId);
+        return request.build();
+    }
+
+    private CapabilityExecutionLifecycleRequest lifecycleRequest(CapabilityLifecycleCommand command) {
+        if (command == null) throw new IllegalArgumentException("command must not be null");
+        var request = CapabilityExecutionLifecycleRequest.newBuilder().setBase(buildBase())
+                .setExecutionId(command.executionId());
+        setIfPresent(command.reason(), request::setReason);
+        setIfPresent(command.idempotencyKey(), request::setIdempotencyKey);
+        return request.build();
+    }
+
+    private CapabilityPackageProtoDTO requirePackage(CapabilityPackageResponse response) {
+        requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
+                response.getMeta().getTid());
+        if (!response.hasPackage()) throw malformed("Missing capability package", response.getMeta().getTid());
+        return response.getPackage();
+    }
+
+    private CapabilityExecutionProtoDTO requireExecution(CapabilityExecutionResponse response) {
+        requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
+                response.getMeta().getTid());
+        if (!response.hasExecution()) throw malformed("Missing capability execution", response.getMeta().getTid());
+        return response.getExecution();
+    }
+
+    private void requireSuccess(boolean hasErrors, com.zqnt.utils.common.proto.GlobalErrorMessage error,
+            String transactionId) {
+        if (!hasErrors && error == null) return;
+        throw new CapabilityClientException(error == null ? "" : error.getErrorCode().name(),
+                error == null ? "Capability operation failed" : error.getErrorMessage(), transactionId);
+    }
+
+    private CapabilityClientException malformed(String message, String transactionId) {
+        return new CapabilityClientException("MALFORMED_RESPONSE", message, transactionId);
+    }
+
+    private void requireCommand(CapabilityExecutionCommand command) {
+        if (command == null) throw new IllegalArgumentException("command must not be null");
+    }
+
+    private void applyScope(CapabilityExecutionCommand command,
+            java.util.function.Consumer<String> organization,
+            java.util.function.Consumer<String> location,
+            java.util.function.Consumer<String> theatre) {
+        setIfPresent(command.organizationId(), organization);
+        setIfPresent(command.locationId(), location);
+        setIfPresent(command.theatreId(), theatre);
+    }
+
+    private static void setIfPresent(String value, java.util.function.Consumer<String> setter) {
+        if (value != null && !value.isBlank()) setter.accept(value);
+    }
+
+    private static String requireText(String value, String name) {
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
+        return value;
+    }
+
 
     @Override
     public CompletableFuture<MissionResponse> createMission(MissionDTO missionDTO) {
@@ -90,8 +309,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setMission(missionBuilder.build())
                 .build();
 
-        return executeAsync(() -> futureStub.createMission(protoRequest))
-                .thenApply(this::toMissionResponse);
+        return removedLegacyOperation("createMission");
     }
 
     @Override
@@ -108,8 +326,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setMission(missionBuilder.build())
                 .build();
 
-        return executeAsync(() -> futureStub.updateMission(protoRequest))
-                .thenApply(this::toMissionResponse);
+        return removedLegacyOperation("updateMission");
     }
 
     public static MissionProtoDTO.Builder mapMissionDtoToProto(MissionProtoDTO.Builder missionId, MissionDTO missionDTO) {
@@ -185,8 +402,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setMissionId(missionId)
                 .build();
 
-        return executeAsync(() -> futureStub.getMission(protoRequest))
-                .thenApply(this::toMissionResponse);
+        return removedLegacyOperation("getMission");
     }
 
     @Override
@@ -198,8 +414,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setMissionId(missionId)
                 .build();
 
-        return executeAsync(() -> futureStub.deleteMission(protoRequest))
-                .thenApply(this::toMissionResponse);
+        return removedLegacyOperation("deleteMission");
     }
 
     @Override
@@ -211,8 +426,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = mapUploadMissionNfzZonesRequest(
                 buildBase(), missionId, zones, replaceExisting);
 
-        return executeAsync(() -> futureStub.uploadMissionNfzZones(protoRequest))
-                .thenApply(this::toMissionResponse);
+        return removedLegacyOperation("uploadMissionNfzZones");
     }
 
     static UploadMissionNfzZonesRequest mapUploadMissionNfzZonesRequest(
@@ -252,8 +466,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTask(taskProtoBuilder.build())
                 .build();
 
-        return executeAsync(() -> futureStub.createTask(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("createTask");
     }
 
     @Override
@@ -270,8 +483,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTask(taskProtoBuilder.build())
                 .build();
 
-        return executeAsync(() -> futureStub.updateTask(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("updateTask");
     }
 
 
@@ -360,8 +572,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(() -> futureStub.getTask(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("getTask");
     }
 
     @Override
@@ -373,8 +584,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setFlightId(flightId)
                 .build();
 
-        return executeAsync(() -> futureStub.getTaskByFlightId(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("getTaskByFlightId");
     }
 
     @Override
@@ -386,8 +596,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(() -> futureStub.deleteTask(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("deleteTask");
     }
 
     @Override
@@ -399,8 +608,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(() -> futureStub.startTask(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("startTask");
     }
 
     @Override
@@ -412,8 +620,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(() -> futureStub.stopTask(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("stopTask");
     }
 
     @Override
@@ -423,8 +630,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
-        return executeAsync(() -> futureStub.pauseTask(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("pauseTask");
     }
 
     @Override
@@ -435,8 +641,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .setTaskId(taskId)
                 .build();
 
-        return executeAsync(() -> futureStub.resumeTask(protoRequest))
-                .thenApply(this::toTaskResponse);
+        return removedLegacyOperation("resumeTask");
     }
 
     @Override
@@ -465,12 +670,17 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (schedulerDTO.getActive() != null) {
             schedulerBuilder.setActive(schedulerDTO.getActive());
         }
-        if (schedulerDTO.getTaskId() != null) {
-            schedulerBuilder.setTaskId(schedulerDTO.getTaskId().toString());
+        if (schedulerDTO.getAssetSn() != null) schedulerBuilder.setAssetSn(schedulerDTO.getAssetSn());
+        if (schedulerDTO.getCommandId() != null) schedulerBuilder.setCommandId(schedulerDTO.getCommandId());
+        if (schedulerDTO.getCapabilityPackageId() != null) {
+            schedulerBuilder.setCapabilityPackageId(schedulerDTO.getCapabilityPackageId());
         }
-        if (schedulerDTO.getMissionId() != null) {
-            schedulerBuilder.setMissionId(schedulerDTO.getMissionId().toString());
+        if (schedulerDTO.getCapabilityId() != null) schedulerBuilder.setCapabilityId(schedulerDTO.getCapabilityId());
+        if (schedulerDTO.getExecutionParametersJson() != null && !schedulerDTO.getExecutionParametersJson().isBlank()) {
+            schedulerBuilder.setExecutionParameters((com.google.protobuf.Struct) ProtoJsonUtils.fromJson(
+                    schedulerDTO.getExecutionParametersJson(), com.google.protobuf.Struct.newBuilder()));
         }
+        if (schedulerDTO.getAutoStart() != null) schedulerBuilder.setAutoStart(schedulerDTO.getAutoStart());
         if (schedulerDTO.getCreatedAt() != null) {
             schedulerBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(schedulerDTO.getCreatedAt()));
         }
@@ -548,23 +758,16 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .thenApply(this::toSchedulerResponse);
     }
 
-    @Override
-    public CompletableFuture<SchedulerResponse> deleteAllSchedulersByTaskId(String taskId) {
-        log.info("Deleting all Schedulers for Task={}", taskId);
-        var protoRequest = DeleteSchedulersByTaskRequest.newBuilder()
-                .setBase(buildBase())
-                .setTaskId(taskId)
-                .build();
-
-        return executeAsync(() -> futureStub.deleteSchedulersByTask(protoRequest))
-                .thenApply(this::toSchedulerResponse);
+    private RequestBase buildBase() {
+        return buildBase(null);
     }
 
-    private RequestBase buildBase() {
-        return RequestBase.newBuilder()
+    private RequestBase buildBase(String assetSn) {
+        var builder = RequestBase.newBuilder()
                 .setTid(UUID.randomUUID().toString())
-                .setTimestamp(ProtobufHelpers.now())
-                .build();
+                .setTimestamp(ProtobufHelpers.now());
+        if (assetSn != null && !assetSn.isBlank()) builder.setSn(assetSn);
+        return builder.build();
     }
 
     /**
@@ -602,6 +805,11 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
             return future;
         });
+    }
+
+    private <T> CompletableFuture<T> removedLegacyOperation(String operation) {
+        return CompletableFuture.failedFuture(new UnsupportedOperationException(
+                operation + " was removed; use capability package and execution APIs"));
     }
 
     /**
