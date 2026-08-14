@@ -1,11 +1,11 @@
 package com.zqnt.sdk.client.livedata.domains;
 
 import com.zqnt.utils.common.proto.ErrorCode;
-import com.zqnt.utils.events.proto.NotificationEventType;
 import com.zqnt.utils.events.proto.CommandExecutionStatus;
-import com.zqnt.utils.execution.proto.CapabilityExecutionEventTypeProto;
-import com.zqnt.utils.execution.proto.CapabilityExecutionStatusProto;
+import com.zqnt.utils.events.proto.NotificationEventType;
 import com.zqnt.utils.execution.proto.ExecutionNodeStatusProto;
+import com.zqnt.utils.execution.proto.SkillExecutionEventTypeProto;
+import com.zqnt.utils.execution.proto.SkillExecutionStatusProto;
 import com.zqnt.utils.mission.proto.MissionStatus;
 import com.zqnt.utils.mission.proto.MissionType;
 import lombok.AllArgsConstructor;
@@ -31,7 +31,7 @@ public class StreamNotificationResponse {
     private NotificationEventType eventType;
     private AssetStatusEvent assetStatus;
     private MissionEvent missionEvent;
-    private CapabilityExecutionEvent capabilityExecutionEvent;
+    private SkillExecutionEvent skillExecutionEvent;
     private CommandExecutionEvent commandExecutionEvent;
     private ErrorInfo error;
 
@@ -61,12 +61,12 @@ public class StreamNotificationResponse {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class CapabilityExecutionEvent {
+    public static class SkillExecutionEvent {
         private String eventId;
         private String executionId;
         private String assetSn;
-        private CapabilityExecutionEventTypeProto type;
-        private CapabilityExecutionStatusProto executionStatus;
+        private SkillExecutionEventTypeProto type;
+        private SkillExecutionStatusProto executionStatus;
         private String nodeId;
         private ExecutionNodeStatusProto nodeStatus;
         private Float progress;

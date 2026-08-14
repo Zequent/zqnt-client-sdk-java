@@ -149,8 +149,8 @@ public class LiveDataMapper {
             switch (event.getEventCase()) {
                 case ASSET_STATUS -> response.setAssetStatus(mapAssetStatusEvent(event.getAssetStatus()));
                 case MISSION -> response.setMissionEvent(mapMissionEvent(event.getMission()));
-                case CAPABILITY_EXECUTION -> response.setCapabilityExecutionEvent(
-                        mapCapabilityExecutionEvent(event.getCapabilityExecution()));
+                case SKILL_EXECUTION -> response.setSkillExecutionEvent(
+                        mapSkillExecutionEvent(event.getSkillExecution()));
                 case COMMAND_EXECUTION -> response.setCommandExecutionEvent(
                         mapCommandExecutionEvent(event.getCommandExecution()));
                 case ERROR -> response.setError(mapNotificationErrorInfo(event.getError()));
@@ -426,9 +426,9 @@ public class LiveDataMapper {
                 .build();
     }
 
-    private StreamNotificationResponse.CapabilityExecutionEvent mapCapabilityExecutionEvent(
-            com.zqnt.utils.execution.proto.CapabilityExecutionEventProto proto) {
-        return StreamNotificationResponse.CapabilityExecutionEvent.builder()
+    private StreamNotificationResponse.SkillExecutionEvent mapSkillExecutionEvent(
+            com.zqnt.utils.execution.proto.SkillExecutionEventProto proto) {
+        return StreamNotificationResponse.SkillExecutionEvent.builder()
                 .eventId(proto.getEventId())
                 .executionId(proto.getExecutionId())
                 .assetSn(proto.getAssetSn())
@@ -478,7 +478,7 @@ public class LiveDataMapper {
             case ASSET_STATUS -> NotificationEventType.NOTIFICATION_EVENT_ASSET_STATUS;
             case MISSION -> NotificationEventType.NOTIFICATION_EVENT_MISSION;
             case ASSET_RUNTIME -> NotificationEventType.NOTIFICATION_EVENT_ASSET_RUNTIME;
-            case CAPABILITY_EXECUTION -> NotificationEventType.NOTIFICATION_EVENT_CAPABILITY_EXECUTION;
+            case SKILL_EXECUTION -> NotificationEventType.NOTIFICATION_EVENT_CAPABILITY_EXECUTION;
             case COMMAND_EXECUTION -> NotificationEventType.NOTIFICATION_EVENT_COMMAND_EXECUTION;
             case ERROR, EVENT_NOT_SET -> null;
         };

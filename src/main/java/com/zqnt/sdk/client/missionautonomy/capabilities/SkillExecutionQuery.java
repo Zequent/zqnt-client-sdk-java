@@ -1,25 +1,25 @@
 package com.zqnt.sdk.client.missionautonomy.capabilities;
 
-import com.zqnt.utils.execution.proto.CapabilityExecutionStatusProto;
+import com.zqnt.utils.execution.proto.SkillExecutionStatusProto;
 
 /** Optional filters and pagination for capability executions. */
-public record CapabilityExecutionQuery(
+public record SkillExecutionQuery(
         String assetSn,
         String organizationId,
-        CapabilityExecutionStatusProto status,
-        String packageId,
-        String capabilityId,
+        SkillExecutionStatusProto status,
+        String applicationId,
+        String skillId,
         String theatreId,
         Integer pageSize,
         String pageToken) {
 
-    public CapabilityExecutionQuery {
+    public SkillExecutionQuery {
         if (pageSize != null && (pageSize < 1 || pageSize > 200)) {
             throw new IllegalArgumentException("pageSize must be between 1 and 200");
         }
     }
 
-    public static CapabilityExecutionQuery firstPage() {
-        return new CapabilityExecutionQuery(null, null, null, null, null, null, null, null);
+    public static SkillExecutionQuery firstPage() {
+        return new SkillExecutionQuery(null, null, null, null, null, null, null, null);
     }
 }

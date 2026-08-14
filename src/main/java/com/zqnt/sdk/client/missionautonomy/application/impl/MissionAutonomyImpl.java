@@ -80,53 +80,53 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
     @Override
-    public CompletableFuture<CapabilityPackageProtoDTO> upsertCapabilityPackage(
-            CapabilityPackageProtoDTO capabilityPackage, String expectedRevision) {
-        if (capabilityPackage == null) throw new IllegalArgumentException("capabilityPackage must not be null");
-        if (capabilityPackage.getId().isBlank()) throw new IllegalArgumentException("package id must not be blank");
-        if (capabilityPackage.getVersion().isBlank()) throw new IllegalArgumentException("package version must not be blank");
-        var request = UpsertCapabilityPackageRequest.newBuilder().setBase(buildBase())
-                .setPackage(capabilityPackage);
+    public CompletableFuture<ApplicationProtoDTO> upsertApplication(
+            ApplicationProtoDTO application, String expectedRevision) {
+        if (application == null) throw new IllegalArgumentException("application must not be null");
+        if (application.getId().isBlank()) throw new IllegalArgumentException("package id must not be blank");
+        if (application.getVersion().isBlank()) throw new IllegalArgumentException("package version must not be blank");
+        var request = UpsertApplicationRequest.newBuilder().setBase(buildBase())
+                .setApplication(application);
         setIfPresent(expectedRevision, request::setExpectedRevision);
-        return executeAsync(() -> futureStub.upsertCapabilityPackage(request.build()))
+        return executeAsync(() -> futureStub.upsertApplication(request.build()))
                 .thenApply(this::requirePackage);
     }
 
     @Override
-    public CompletableFuture<CapabilityPackageProtoDTO> getCapabilityPackage(String packageId, String version) {
-        var request = GetCapabilityPackageRequest.newBuilder().setBase(buildBase())
-                .setPackageId(requireText(packageId, "packageId"));
+    public CompletableFuture<ApplicationProtoDTO> getApplication(String applicationId, String version) {
+        var request = GetApplicationRequest.newBuilder().setBase(buildBase())
+                .setApplicationId(requireText(applicationId, "applicationId"));
         setIfPresent(version, request::setVersion);
-        return executeAsync(() -> futureStub.getCapabilityPackage(request.build()))
+        return executeAsync(() -> futureStub.getApplication(request.build()))
                 .thenApply(this::requirePackage);
     }
 
     @Override
-    public CompletableFuture<CapabilityPage<CapabilityPackageProtoDTO>> listCapabilityPackages(
-            CapabilityPackageQuery query) {
-        CapabilityPackageQuery safe = query == null ? CapabilityPackageQuery.firstPage() : query;
-        var request = ListCapabilityPackagesRequest.newBuilder().setBase(buildBase());
+    public CompletableFuture<ResultPage<ApplicationProtoDTO>> listApplications(
+            ApplicationQuery query) {
+        ApplicationQuery safe = query == null ? ApplicationQuery.firstPage() : query;
+        var request = ListApplicationsRequest.newBuilder().setBase(buildBase());
         if (safe.scope() != null) request.setScope(safe.scope());
         if (safe.enabledOnly() != null) request.setEnabledOnly(safe.enabledOnly());
         if (safe.pageSize() != null) request.setPageSize(safe.pageSize());
         setIfPresent(safe.pageToken(), request::setPageToken);
-        return executeAsync(() -> futureStub.listCapabilityPackages(request.build())).thenApply(response -> {
+        return executeAsync(() -> futureStub.listApplications(request.build())).thenApply(response -> {
             requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
                     response.getMeta().getTid());
-            if (!response.hasResult()) return new CapabilityPage<>(List.of(), "");
-            return new CapabilityPage<>(response.getResult().getPackagesList(),
+            if (!response.hasResult()) return new ResultPage<>(List.of(), "");
+            return new ResultPage<>(response.getResult().getApplicationsList(),
                     response.getResult().hasNextPageToken() ? response.getResult().getNextPageToken() : "");
         });
     }
 
     @Override
-    public CompletableFuture<Void> deleteCapabilityPackage(String packageId, String version,
+    public CompletableFuture<Void> deleteApplication(String applicationId, String version,
             String expectedRevision) {
-        var request = DeleteCapabilityPackageRequest.newBuilder().setBase(buildBase())
-                .setPackageId(requireText(packageId, "packageId"));
+        var request = DeleteApplicationRequest.newBuilder().setBase(buildBase())
+                .setApplicationId(requireText(applicationId, "applicationId"));
         setIfPresent(version, request::setVersion);
         setIfPresent(expectedRevision, request::setExpectedRevision);
-        return executeAsync(() -> futureStub.deleteCapabilityPackage(request.build())).thenApply(response -> {
+        return executeAsync(() -> futureStub.deleteApplication(request.build())).thenApply(response -> {
             requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
                     response.getMeta().getTid());
             return null;
@@ -134,88 +134,88 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
     @Override
-    public CompletableFuture<CapabilityExecutionProtoDTO> createCapabilityExecution(
-            CapabilityExecutionCommand command) {
+    public CompletableFuture<SkillExecutionProtoDTO> createSkillExecution(
+            SkillExecutionCommand command) {
         var request = createExecutionRequest(command);
-        return executeAsync(() -> futureStub.createCapabilityExecution(request)).thenApply(this::requireExecution);
+        return executeAsync(() -> futureStub.createSkillExecution(request)).thenApply(this::requireExecution);
     }
 
     @Override
-    public CompletableFuture<CapabilityExecutionProtoDTO> executeCapability(CapabilityExecutionCommand command) {
+    public CompletableFuture<SkillExecutionProtoDTO> executeSkill(SkillExecutionCommand command) {
         requireCommand(command);
-        var request = ExecuteCapabilityRequest.newBuilder().setBase(buildBase(command.assetSn()))
+        var request = ExecuteSkillRequest.newBuilder().setBase(buildBase(command.assetSn()))
                 .setSpec(command.spec()).setOptions(command.options()).setIdempotencyKey(command.idempotencyKey());
         applyScope(command, request::setOrganizationId, request::setLocationId, request::setTheatreId);
-        return executeAsync(() -> futureStub.executeCapability(request.build())).thenApply(this::requireExecution);
+        return executeAsync(() -> futureStub.executeSkill(request.build())).thenApply(this::requireExecution);
     }
 
     @Override
-    public CompletableFuture<CapabilityExecutionProtoDTO> getCapabilityExecution(String executionId) {
-        var request = GetCapabilityExecutionRequest.newBuilder().setBase(buildBase())
+    public CompletableFuture<SkillExecutionProtoDTO> getSkillExecution(String executionId) {
+        var request = GetSkillExecutionRequest.newBuilder().setBase(buildBase())
                 .setExecutionId(requireText(executionId, "executionId")).build();
-        return executeAsync(() -> futureStub.getCapabilityExecution(request)).thenApply(this::requireExecution);
+        return executeAsync(() -> futureStub.getSkillExecution(request)).thenApply(this::requireExecution);
     }
 
     @Override
-    public CompletableFuture<CapabilityPage<CapabilityExecutionProtoDTO>> listCapabilityExecutions(
-            CapabilityExecutionQuery query) {
-        CapabilityExecutionQuery safe = query == null ? CapabilityExecutionQuery.firstPage() : query;
-        var request = ListCapabilityExecutionsRequest.newBuilder().setBase(buildBase());
+    public CompletableFuture<ResultPage<SkillExecutionProtoDTO>> listSkillExecutions(
+            SkillExecutionQuery query) {
+        SkillExecutionQuery safe = query == null ? SkillExecutionQuery.firstPage() : query;
+        var request = ListSkillExecutionsRequest.newBuilder().setBase(buildBase());
         setIfPresent(safe.assetSn(), request::setAssetSn);
         setIfPresent(safe.organizationId(), request::setOrganizationId);
         if (safe.status() != null) request.setStatus(safe.status());
-        setIfPresent(safe.packageId(), request::setPackageId);
-        setIfPresent(safe.capabilityId(), request::setCapabilityId);
+        setIfPresent(safe.applicationId(), request::setApplicationId);
+        setIfPresent(safe.skillId(), request::setSkillId);
         setIfPresent(safe.theatreId(), request::setTheatreId);
         if (safe.pageSize() != null) request.setPageSize(safe.pageSize());
         setIfPresent(safe.pageToken(), request::setPageToken);
-        return executeAsync(() -> futureStub.listCapabilityExecutions(request.build())).thenApply(response -> {
+        return executeAsync(() -> futureStub.listSkillExecutions(request.build())).thenApply(response -> {
             requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
                     response.getMeta().getTid());
-            if (!response.hasResult()) return new CapabilityPage<>(List.of(), "");
-            return new CapabilityPage<>(response.getResult().getExecutionsList(),
+            if (!response.hasResult()) return new ResultPage<>(List.of(), "");
+            return new ResultPage<>(response.getResult().getExecutionsList(),
                     response.getResult().hasNextPageToken() ? response.getResult().getNextPageToken() : "");
         });
     }
 
     @Override
-    public CompletableFuture<CapabilityExecutionProtoDTO> startCapabilityExecution(
-            CapabilityLifecycleCommand command) {
+    public CompletableFuture<SkillExecutionProtoDTO> startSkillExecution(
+            SkillExecutionLifecycleCommand command) {
         var request = lifecycleRequest(command);
-        return executeAsync(() -> futureStub.startCapabilityExecution(request)).thenApply(this::requireExecution);
+        return executeAsync(() -> futureStub.startSkillExecution(request)).thenApply(this::requireExecution);
     }
 
     @Override
-    public CompletableFuture<CapabilityExecutionProtoDTO> pauseCapabilityExecution(
-            CapabilityLifecycleCommand command) {
+    public CompletableFuture<SkillExecutionProtoDTO> pauseSkillExecution(
+            SkillExecutionLifecycleCommand command) {
         var request = lifecycleRequest(command);
-        return executeAsync(() -> futureStub.pauseCapabilityExecution(request)).thenApply(this::requireExecution);
+        return executeAsync(() -> futureStub.pauseSkillExecution(request)).thenApply(this::requireExecution);
     }
 
     @Override
-    public CompletableFuture<CapabilityExecutionProtoDTO> resumeCapabilityExecution(
-            CapabilityLifecycleCommand command) {
+    public CompletableFuture<SkillExecutionProtoDTO> resumeSkillExecution(
+            SkillExecutionLifecycleCommand command) {
         var request = lifecycleRequest(command);
-        return executeAsync(() -> futureStub.resumeCapabilityExecution(request)).thenApply(this::requireExecution);
+        return executeAsync(() -> futureStub.resumeSkillExecution(request)).thenApply(this::requireExecution);
     }
 
     @Override
-    public CompletableFuture<CapabilityExecutionProtoDTO> cancelCapabilityExecution(
-            CapabilityLifecycleCommand command) {
+    public CompletableFuture<SkillExecutionProtoDTO> cancelSkillExecution(
+            SkillExecutionLifecycleCommand command) {
         var request = lifecycleRequest(command);
-        return executeAsync(() -> futureStub.cancelCapabilityExecution(request)).thenApply(this::requireExecution);
+        return executeAsync(() -> futureStub.cancelSkillExecution(request)).thenApply(this::requireExecution);
     }
 
     @Override
-    public CompletableFuture<CapabilityExecutionProtoDTO> signalCapabilityExecution(CapabilitySignalCommand command) {
+    public CompletableFuture<SkillExecutionProtoDTO> signalSkillExecution(SkillExecutionSignalCommand command) {
         if (command == null) throw new IllegalArgumentException("command must not be null");
-        var request = SignalCapabilityExecutionRequest.newBuilder().setBase(buildBase())
+        var request = SignalSkillExecutionRequest.newBuilder().setBase(buildBase())
                 .setExecutionId(command.executionId()).setData(command.data());
         setIfPresent(command.nodeId(), request::setNodeId);
         setIfPresent(command.eventType(), request::setEventType);
         if (command.approved() != null) request.setApproved(command.approved());
         setIfPresent(command.idempotencyKey(), request::setIdempotencyKey);
-        return executeAsync(() -> futureStub.signalCapabilityExecution(request.build()))
+        return executeAsync(() -> futureStub.signalSkillExecution(request.build()))
                 .thenApply(this::requireExecution);
     }
 
@@ -232,31 +232,31 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         });
     }
 
-    private CreateCapabilityExecutionRequest createExecutionRequest(CapabilityExecutionCommand command) {
+    private CreateSkillExecutionRequest createExecutionRequest(SkillExecutionCommand command) {
         requireCommand(command);
-        var request = CreateCapabilityExecutionRequest.newBuilder().setBase(buildBase(command.assetSn()))
+        var request = CreateSkillExecutionRequest.newBuilder().setBase(buildBase(command.assetSn()))
                 .setSpec(command.spec()).setOptions(command.options()).setIdempotencyKey(command.idempotencyKey());
         applyScope(command, request::setOrganizationId, request::setLocationId, request::setTheatreId);
         return request.build();
     }
 
-    private CapabilityExecutionLifecycleRequest lifecycleRequest(CapabilityLifecycleCommand command) {
+    private SkillExecutionLifecycleRequest lifecycleRequest(SkillExecutionLifecycleCommand command) {
         if (command == null) throw new IllegalArgumentException("command must not be null");
-        var request = CapabilityExecutionLifecycleRequest.newBuilder().setBase(buildBase())
+        var request = SkillExecutionLifecycleRequest.newBuilder().setBase(buildBase())
                 .setExecutionId(command.executionId());
         setIfPresent(command.reason(), request::setReason);
         setIfPresent(command.idempotencyKey(), request::setIdempotencyKey);
         return request.build();
     }
 
-    private CapabilityPackageProtoDTO requirePackage(CapabilityPackageResponse response) {
+    private ApplicationProtoDTO requirePackage(ApplicationResponse response) {
         requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
                 response.getMeta().getTid());
-        if (!response.hasPackage()) throw malformed("Missing capability package", response.getMeta().getTid());
-        return response.getPackage();
+        if (!response.hasApplication()) throw malformed("Missing capability package", response.getMeta().getTid());
+        return response.getApplication();
     }
 
-    private CapabilityExecutionProtoDTO requireExecution(CapabilityExecutionResponse response) {
+    private SkillExecutionProtoDTO requireExecution(SkillExecutionResponse response) {
         requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
                 response.getMeta().getTid());
         if (!response.hasExecution()) throw malformed("Missing capability execution", response.getMeta().getTid());
@@ -266,19 +266,19 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     private void requireSuccess(boolean hasErrors, com.zqnt.utils.common.proto.GlobalErrorMessage error,
             String transactionId) {
         if (!hasErrors && error == null) return;
-        throw new CapabilityClientException(error == null ? "" : error.getErrorCode().name(),
+        throw new MissionAutonomyClientException(error == null ? "" : error.getErrorCode().name(),
                 error == null ? "Capability operation failed" : error.getErrorMessage(), transactionId);
     }
 
-    private CapabilityClientException malformed(String message, String transactionId) {
-        return new CapabilityClientException("MALFORMED_RESPONSE", message, transactionId);
+    private MissionAutonomyClientException malformed(String message, String transactionId) {
+        return new MissionAutonomyClientException("MALFORMED_RESPONSE", message, transactionId);
     }
 
-    private void requireCommand(CapabilityExecutionCommand command) {
+    private void requireCommand(SkillExecutionCommand command) {
         if (command == null) throw new IllegalArgumentException("command must not be null");
     }
 
-    private void applyScope(CapabilityExecutionCommand command,
+    private void applyScope(SkillExecutionCommand command,
             java.util.function.Consumer<String> organization,
             java.util.function.Consumer<String> location,
             java.util.function.Consumer<String> theatre) {
@@ -673,9 +673,9 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (schedulerDTO.getAssetSn() != null) schedulerBuilder.setAssetSn(schedulerDTO.getAssetSn());
         if (schedulerDTO.getCommandId() != null) schedulerBuilder.setCommandId(schedulerDTO.getCommandId());
         if (schedulerDTO.getCapabilityPackageId() != null) {
-            schedulerBuilder.setCapabilityPackageId(schedulerDTO.getCapabilityPackageId());
+            schedulerBuilder.setApplicationId(schedulerDTO.getCapabilityPackageId());
         }
-        if (schedulerDTO.getCapabilityId() != null) schedulerBuilder.setCapabilityId(schedulerDTO.getCapabilityId());
+        if (schedulerDTO.getCapabilityId() != null) schedulerBuilder.setSkillId(schedulerDTO.getCapabilityId());
         if (schedulerDTO.getExecutionParametersJson() != null && !schedulerDTO.getExecutionParametersJson().isBlank()) {
             schedulerBuilder.setExecutionParameters((com.google.protobuf.Struct) ProtoJsonUtils.fromJson(
                     schedulerDTO.getExecutionParametersJson(), com.google.protobuf.Struct.newBuilder()));

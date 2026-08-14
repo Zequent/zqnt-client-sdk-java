@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.connector.application.Connector;
+import com.zqnt.sdk.client.connector.application.ConnectorClientException;
 import com.zqnt.sdk.client.connector.domains.*;
 import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.livedata.domains.StreamHandle;
@@ -117,6 +118,42 @@ public final class ConnectorImpl implements Connector {
         return execute(() -> futureStub.getTechnicalConfigs(mapper.configs(ConnectorRequestValidator.validate(request)))).thenApply(mapper::configResponse);
     }
 
+    @Override public CompletableFuture<com.zqnt.utils.connector.proto.SkillContractProtoDTO> observeSkillContract(
+            com.zqnt.utils.connector.proto.SkillContractProtoDTO contract) {
+        require(contract);
+        var protoRequest = com.zqnt.utils.connector.proto.UpsertSkillContractRequest.newBuilder()
+                .setBase(buildBase()).setContract(contract).build();
+        return execute(() -> futureStub.observeSkillContract(protoRequest)).thenApply(this::requireContract);
+    }
+
+    @Override public CompletableFuture<java.util.List<com.zqnt.utils.connector.proto.SkillContractProtoDTO>> listSkillContracts(
+            com.zqnt.utils.connector.proto.SkillContractStatus status, String commandId) {
+        var protoRequest = com.zqnt.utils.connector.proto.ListSkillContractsRequest.newBuilder().setBase(buildBase());
+        if (status != null) protoRequest.setStatus(status);
+        if (commandId != null && !commandId.isBlank()) protoRequest.setCommandId(commandId);
+        return execute(() -> futureStub.listSkillContracts(protoRequest.build())).thenApply(response -> {
+            requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
+                    response.getTid());
+            return response.getContractsList();
+        });
+    }
+
+    @Override public CompletableFuture<com.zqnt.utils.connector.proto.SkillContractProtoDTO> setSkillContractStatus(
+            String id, com.zqnt.utils.connector.proto.SkillContractStatus status) {
+        var protoRequest = com.zqnt.utils.connector.proto.SetSkillContractStatusRequest.newBuilder().setBase(buildBase())
+                .setId(requireText(id, "id")).setStatus(status).build();
+        return execute(() -> futureStub.setSkillContractStatus(protoRequest)).thenApply(this::requireContract);
+    }
+
+    @Override public CompletableFuture<com.zqnt.utils.connector.proto.SkillContractProtoDTO> setSkillContractPermissions(
+            String id, java.util.List<String> requiredPermissions) {
+        var protoRequest = com.zqnt.utils.connector.proto.SetSkillContractPermissionsRequest.newBuilder()
+                .setBase(buildBase()).setId(requireText(id, "id"))
+                .addAllRequiredPermissions(requiredPermissions == null ? java.util.List.of() : requiredPermissions)
+                .build();
+        return execute(() -> futureStub.setSkillContractPermissions(protoRequest)).thenApply(this::requireContract);
+    }
+
     @Override
     public StreamHandle assetMonitoring(AssetMonitoringRequest request, Consumer<AssetMonitoringResponse> onData,
                                         Consumer<Throwable> onError) {
@@ -183,5 +220,37 @@ public final class ConnectorImpl implements Connector {
     }
 
     private static <T> T require(T request) { return Objects.requireNonNull(request, "request must not be null"); }
+
+    private static String requireText(String value, String name) {
+        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
+        return value;
+    }
+
+    private RequestBase buildBase() {
+        return RequestBase.newBuilder().setTid(java.util.UUID.randomUUID().toString())
+                .setTimestamp(com.zqnt.utils.core.ProtobufHelpers.now()).build();
+    }
+
+    /** Throw-on-error unwrapping for the Skill Registry's raw-proto responses — mirrors
+     * MissionAutonomyImpl's convention for its own raw-proto capability-execution surface, unlike
+     * this class's older hand-mapped endpoints, which surface errors via {@code ConnectorResponse}
+     * fields instead of throwing. */
+    private com.zqnt.utils.connector.proto.SkillContractProtoDTO requireContract(
+            com.zqnt.utils.connector.proto.SkillContractResponse response) {
+        requireSuccess(response.getHasErrors(), response.hasError() ? response.getError() : null,
+                response.getTid());
+        if (!response.hasContract()) {
+            throw new ConnectorClientException("MALFORMED_RESPONSE", "Missing skill contract", response.getTid());
+        }
+        return response.getContract();
+    }
+
+    private void requireSuccess(boolean hasErrors, com.zqnt.utils.common.proto.GlobalErrorMessage error,
+            String transactionId) {
+        if (!hasErrors && error == null) return;
+        throw new ConnectorClientException(error == null ? "" : error.getErrorCode().name(),
+                error == null ? "Connector operation failed" : error.getErrorMessage(), transactionId);
+    }
+
     public void shutdown() { callbackExecutor.shutdown(); }
 }

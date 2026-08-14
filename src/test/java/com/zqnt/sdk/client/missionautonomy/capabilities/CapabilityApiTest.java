@@ -2,9 +2,9 @@ package com.zqnt.sdk.client.missionautonomy.capabilities;
 
 import com.google.protobuf.Struct;
 import com.zqnt.utils.devicecontrol.proto.CapabilityTarget;
-import com.zqnt.utils.execution.proto.CapabilityExecutionOptionsProto;
-import com.zqnt.utils.execution.proto.CapabilityExecutionSpecProto;
 import com.zqnt.utils.execution.proto.SimpleExecutionSpecProto;
+import com.zqnt.utils.execution.proto.SkillExecutionOptionsProto;
+import com.zqnt.utils.execution.proto.SkillExecutionSpecProto;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,7 +19,7 @@ class CapabilityApiTest {
         var parameters = Struct.newBuilder().putFields("altitude",
                 com.google.protobuf.Value.newBuilder().setNumberValue(30).build()).build();
 
-        var command = CapabilityExecutionCommand.simple("drone-1", "flight.takeoff",
+        var command = SkillExecutionCommand.simple("drone-1", "flight.takeoff",
                 CapabilityTarget.getDefaultInstance(), parameters, "takeoff-42");
 
         assertEquals("drone-1", command.assetSn());
@@ -32,36 +32,36 @@ class CapabilityApiTest {
 
     @Test
     void createsVersionedPackageExecution() {
-        var command = CapabilityExecutionCommand.packaged("drone-1", "inspection", "perimeter",
+        var command = SkillExecutionCommand.packaged("drone-1", "inspection", "perimeter",
                 "2.1.0", Struct.getDefaultInstance(), "exec-1");
 
-        assertTrue(command.spec().hasPackage());
-        assertEquals("inspection", command.spec().getPackage().getPackageId());
-        assertEquals("perimeter", command.spec().getPackage().getCapabilityId());
-        assertEquals("2.1.0", command.spec().getPackage().getPackageVersion());
+        assertTrue(command.spec().hasApplication());
+        assertEquals("inspection", command.spec().getApplication().getApplicationId());
+        assertEquals("perimeter", command.spec().getApplication().getSkillId());
+        assertEquals("2.1.0", command.spec().getApplication().getApplicationVersion());
     }
 
     @Test
     void rejectsInvalidCommandsAndQueriesBeforeNetworkCall() {
-        var validSpec = CapabilityExecutionSpecProto.newBuilder().setSimple(
+        var validSpec = SkillExecutionSpecProto.newBuilder().setSimple(
                 SimpleExecutionSpecProto.newBuilder().setCommandId("flight.takeoff")).build();
 
-        assertThrows(IllegalArgumentException.class, () -> new CapabilityExecutionCommand(
-                " ", validSpec, CapabilityExecutionOptionsProto.getDefaultInstance(), "key",
+        assertThrows(IllegalArgumentException.class, () -> new SkillExecutionCommand(
+                " ", validSpec, SkillExecutionOptionsProto.getDefaultInstance(), "key",
                 null, null, null));
-        assertThrows(IllegalArgumentException.class, () -> new CapabilityExecutionCommand(
-                "drone-1", CapabilityExecutionSpecProto.getDefaultInstance(),
-                CapabilityExecutionOptionsProto.getDefaultInstance(), "key", null, null, null));
-        assertThrows(IllegalArgumentException.class, () -> new CapabilityPackageQuery(
+        assertThrows(IllegalArgumentException.class, () -> new SkillExecutionCommand(
+                "drone-1", SkillExecutionSpecProto.getDefaultInstance(),
+                SkillExecutionOptionsProto.getDefaultInstance(), "key", null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> new ApplicationQuery(
                 null, null, 201, null));
-        assertThrows(IllegalArgumentException.class, () -> new CapabilitySignalCommand(
+        assertThrows(IllegalArgumentException.class, () -> new SkillExecutionSignalCommand(
                 "exec-1", null, null, null, null, null));
     }
 
     @Test
     void pagesAreImmutableAndExposeContinuation() {
         var mutable = new ArrayList<>(List.of("first"));
-        var page = new CapabilityPage<>(mutable, "next");
+        var page = new ResultPage<>(mutable, "next");
         mutable.add("second");
 
         assertEquals(List.of("first"), page.items());

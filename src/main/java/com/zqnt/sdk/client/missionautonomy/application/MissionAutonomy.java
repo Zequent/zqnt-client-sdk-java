@@ -1,15 +1,15 @@
 package com.zqnt.sdk.client.missionautonomy.application;
 
-import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
-import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
-import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
 import com.zqnt.sdk.client.missionautonomy.capabilities.*;
-import com.zqnt.utils.execution.proto.CapabilityExecutionProtoDTO;
-import com.zqnt.utils.execution.proto.CapabilityPackageProtoDTO;
+import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
+import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
+import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
+import com.zqnt.utils.execution.proto.ApplicationProtoDTO;
 import com.zqnt.utils.execution.proto.ResolvedExecutionConfigProtoDTO;
-import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
+import com.zqnt.utils.execution.proto.SkillExecutionProtoDTO;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.MissionZoneDTO;
+import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 
 import java.util.List;
@@ -18,24 +18,24 @@ import java.util.concurrent.CompletableFuture;
 public interface MissionAutonomy {
 
     // Capability package administration
-    CompletableFuture<CapabilityPackageProtoDTO> upsertCapabilityPackage(
-            CapabilityPackageProtoDTO capabilityPackage, String expectedRevision);
-    CompletableFuture<CapabilityPackageProtoDTO> getCapabilityPackage(String packageId, String version);
-    CompletableFuture<CapabilityPage<CapabilityPackageProtoDTO>> listCapabilityPackages(CapabilityPackageQuery query);
-    CompletableFuture<Void> deleteCapabilityPackage(String packageId, String version,
+    CompletableFuture<ApplicationProtoDTO> upsertApplication(
+            ApplicationProtoDTO application, String expectedRevision);
+    CompletableFuture<ApplicationProtoDTO> getApplication(String applicationId, String version);
+    CompletableFuture<ResultPage<ApplicationProtoDTO>> listApplications(ApplicationQuery query);
+    CompletableFuture<Void> deleteApplication(String applicationId, String version,
                                                      String expectedRevision);
 
     // Mission-free capability execution
-    CompletableFuture<CapabilityExecutionProtoDTO> createCapabilityExecution(CapabilityExecutionCommand command);
-    CompletableFuture<CapabilityExecutionProtoDTO> executeCapability(CapabilityExecutionCommand command);
-    CompletableFuture<CapabilityExecutionProtoDTO> getCapabilityExecution(String executionId);
-    CompletableFuture<CapabilityPage<CapabilityExecutionProtoDTO>> listCapabilityExecutions(
-            CapabilityExecutionQuery query);
-    CompletableFuture<CapabilityExecutionProtoDTO> startCapabilityExecution(CapabilityLifecycleCommand command);
-    CompletableFuture<CapabilityExecutionProtoDTO> pauseCapabilityExecution(CapabilityLifecycleCommand command);
-    CompletableFuture<CapabilityExecutionProtoDTO> resumeCapabilityExecution(CapabilityLifecycleCommand command);
-    CompletableFuture<CapabilityExecutionProtoDTO> cancelCapabilityExecution(CapabilityLifecycleCommand command);
-    CompletableFuture<CapabilityExecutionProtoDTO> signalCapabilityExecution(CapabilitySignalCommand command);
+    CompletableFuture<SkillExecutionProtoDTO> createSkillExecution(SkillExecutionCommand command);
+    CompletableFuture<SkillExecutionProtoDTO> executeSkill(SkillExecutionCommand command);
+    CompletableFuture<SkillExecutionProtoDTO> getSkillExecution(String executionId);
+    CompletableFuture<ResultPage<SkillExecutionProtoDTO>> listSkillExecutions(
+            SkillExecutionQuery query);
+    CompletableFuture<SkillExecutionProtoDTO> startSkillExecution(SkillExecutionLifecycleCommand command);
+    CompletableFuture<SkillExecutionProtoDTO> pauseSkillExecution(SkillExecutionLifecycleCommand command);
+    CompletableFuture<SkillExecutionProtoDTO> resumeSkillExecution(SkillExecutionLifecycleCommand command);
+    CompletableFuture<SkillExecutionProtoDTO> cancelSkillExecution(SkillExecutionLifecycleCommand command);
+    CompletableFuture<SkillExecutionProtoDTO> signalSkillExecution(SkillExecutionSignalCommand command);
     CompletableFuture<ResolvedExecutionConfigProtoDTO> resolveExecutionConfig(ExecutionConfigQuery query);
 
     /** @deprecated Missions were replaced by capability executions. */
