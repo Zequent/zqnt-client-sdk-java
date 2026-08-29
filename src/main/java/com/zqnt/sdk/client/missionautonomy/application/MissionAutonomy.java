@@ -1,11 +1,12 @@
 package com.zqnt.sdk.client.missionautonomy.application;
 
-import com.zqnt.utils.missionautonomy.domains.MissionDTO;
-import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
-import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
+import com.zqnt.utils.missionautonomy.domains.MissionDTO;
+import com.zqnt.utils.missionautonomy.domains.MissionZoneDTO;
+import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
+import com.zqnt.utils.missionautonomy.domains.TaskDTO;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -17,6 +18,8 @@ public interface MissionAutonomy {
     CompletableFuture<MissionResponse> updateMission(String missionId, MissionDTO missionDTO);
     CompletableFuture<MissionResponse> getMission(String missionId);
     CompletableFuture<MissionResponse> deleteMission(String missionId);
+    CompletableFuture<MissionResponse> uploadMissionNfzZones(
+            String missionId, List<MissionZoneDTO> zones, boolean replaceExisting);
 
     // Task
     CompletableFuture<TaskResponse> createTask(TaskDTO taskDTO);

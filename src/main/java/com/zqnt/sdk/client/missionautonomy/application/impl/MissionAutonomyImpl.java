@@ -7,13 +7,15 @@ import com.zqnt.sdk.client.missionautonomy.domains.MissionResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.SchedulerResponse;
 import com.zqnt.sdk.client.missionautonomy.domains.TaskResponse;
 import com.zqnt.utils.JsonUtils;
-import com.zqnt.utils.common.proto.*;
+import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtoJsonUtils;
 import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.mission.proto.*;
 import com.zqnt.utils.missionautonomy.domains.MissionDTO;
+import com.zqnt.utils.missionautonomy.domains.MissionZoneDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.TaskDTO;
+import com.zqnt.utils.missionautonomy.domains.config.*;
 import io.grpc.ManagedChannel;
 import lombok.extern.slf4j.Slf4j;
 
@@ -85,7 +87,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
         var protoRequest = CreateMissionRequest.newBuilder()
                 .setBase(buildBase())
-                .setMissionDto(missionBuilder.build())
+                .setMission(missionBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createMission(protoRequest))
@@ -103,14 +105,14 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateMissionRequest.newBuilder()
                 .setBase(buildBase())
                 .setMissionId(missionId)
-                .setMissionDto(missionBuilder.build())
+                .setMission(missionBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateMission(protoRequest))
                 .thenApply(this::toMissionResponse);
     }
 
-    private static MissionProtoDTO.Builder mapMissionDtoToProto(MissionProtoDTO.Builder missionId, MissionDTO missionDTO) {
+    public static MissionProtoDTO.Builder mapMissionDtoToProto(MissionProtoDTO.Builder missionId, MissionDTO missionDTO) {
         var missionBuilder = missionId
                 .setName(missionDTO.getName() != null ? missionDTO.getName() : "")
                 .setDescription(missionDTO.getDescription() != null ? missionDTO.getDescription() : "");
@@ -139,7 +141,39 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (missionDTO.getModifiedAt() != null) {
             missionBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(missionDTO.getModifiedAt()));
         }
+        if (missionDTO.getModifiedFrom() != null) {
+            missionBuilder.setUpdatedUser(missionDTO.getModifiedFrom());
+        }
+        if (missionDTO.getMissionConfig() != null) {
+            missionBuilder.setMissionConfig((DynamicConfigProto) ProtoJsonUtils.fromJson(
+                    JsonUtils.toJson(missionDTO.getMissionConfig()), DynamicConfigProto.newBuilder()));
+        }
+        if (missionDTO.getAutonomyConfig() != null) {
+            missionBuilder.setAutonomyConfig((AutonomyConfigProto) ProtoJsonUtils.fromJson(
+                    JsonUtils.toJson(missionDTO.getAutonomyConfig()), AutonomyConfigProto.newBuilder()));
+        }
+        if (missionDTO.getExternalId() != null) {
+            missionBuilder.setExternalId(missionDTO.getExternalId());
+        }
+        if (missionDTO.getExternalMissionType() != null) {
+            missionBuilder.setExternalMissionType(missionDTO.getExternalMissionType());
+        }
+        if (missionDTO.getTasks() != null) {
+            missionBuilder.addAllTasks(missionDTO.getTasks().stream()
+                    .map(task -> mapTaskDtoToProto(TaskProtoDTO.newBuilder(), task).build())
+                    .toList());
+        }
+        if (missionDTO.getZones() != null) {
+            missionBuilder.addAllZones(missionDTO.getZones().stream()
+                    .map(MissionAutonomyImpl::mapMissionZoneDtoToProto)
+                    .toList());
+        }
         return missionBuilder;
+    }
+
+    public static MissionZoneProtoDTO mapMissionZoneDtoToProto(MissionZoneDTO zone) {
+        return (MissionZoneProtoDTO) ProtoJsonUtils.fromJson(
+                JsonUtils.toJson(zone), MissionZoneProtoDTO.newBuilder());
     }
 
     @Override
@@ -169,6 +203,45 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
     @Override
+    public CompletableFuture<MissionResponse> uploadMissionNfzZones(
+            String missionId, List<MissionZoneDTO> zones, boolean replaceExisting) {
+        log.info("Uploading mission NFZ zones: missionId={}, count={}, replaceExisting={}",
+                missionId, zones != null ? zones.size() : 0, replaceExisting);
+
+        var protoRequest = mapUploadMissionNfzZonesRequest(
+                buildBase(), missionId, zones, replaceExisting);
+
+        return executeAsync(() -> futureStub.uploadMissionNfzZones(protoRequest))
+                .thenApply(this::toMissionResponse);
+    }
+
+    static UploadMissionNfzZonesRequest mapUploadMissionNfzZonesRequest(
+            RequestBase base, String missionId, List<MissionZoneDTO> zones, boolean replaceExisting) {
+        if (missionId == null || missionId.isBlank()) {
+            throw new IllegalArgumentException("missionId must not be null or blank");
+        }
+        if (zones == null) {
+            throw new IllegalArgumentException("zones must not be null");
+        }
+        for (int index = 0; index < zones.size(); index++) {
+            MissionZoneDTO zone = zones.get(index);
+            if (zone == null) {
+                throw new IllegalArgumentException("zones[" + index + "] must not be null");
+            }
+            zone.validate();
+        }
+
+        return UploadMissionNfzZonesRequest.newBuilder()
+                .setBase(base)
+                .setMissionId(missionId)
+                .addAllZones(zones.stream()
+                        .map(MissionAutonomyImpl::mapMissionZoneDtoToProto)
+                        .toList())
+                .setReplaceExisting(replaceExisting)
+                .build();
+    }
+
+    @Override
     public CompletableFuture<TaskResponse> createTask(TaskDTO taskDTO) {
         log.info("Creating task: name={}", taskDTO.getName());
         taskDTO.validate();
@@ -176,7 +249,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
 
         var protoRequest = CreateTaskRequest.newBuilder()
                 .setBase(buildBase())
-                .setTaskDto(taskProtoBuilder.build())
+                .setTask(taskProtoBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createTask(protoRequest))
@@ -194,7 +267,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateTaskRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
-                .setTaskDto(taskProtoBuilder.build())
+                .setTask(taskProtoBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateTask(protoRequest))
@@ -202,7 +275,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
 
-    private static TaskProtoDTO.Builder mapTaskDtoToProto(TaskProtoDTO.Builder taskId, TaskDTO taskDTO) {
+    public static TaskProtoDTO.Builder mapTaskDtoToProto(TaskProtoDTO.Builder taskId, TaskDTO taskDTO) {
         var taskProtoBuilder = taskId
                 .setName(taskDTO.getName() != null ? taskDTO.getName() : "")
                 .setSnNumber(taskDTO.getSnNumber() != null ? taskDTO.getSnNumber() : "")
@@ -215,11 +288,9 @@ public class MissionAutonomyImpl implements MissionAutonomy {
             taskProtoBuilder.setMissionId(taskDTO.getMissionId().toString());
         }
         if (taskDTO.getTaskType() != null) {
-            taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()).name());
+            taskProtoBuilder.setTaskType(TaskTypeProto.valueOf(taskDTO.getTaskType().name()));
         }
-        if (taskDTO.getConfig() != null) {
-            taskProtoBuilder.setConfig(JsonUtils.toJson(taskDTO.getConfig()));
-        }
+        mapTaskConfig(taskProtoBuilder, taskDTO);
         if (taskDTO.getStatus() != null) {
             taskProtoBuilder.setStatus(taskDTO.getStatus());
         }
@@ -236,7 +307,47 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (taskDTO.getBreakReason() != null) {
             taskProtoBuilder.setBreakReason(taskDTO.getBreakReason());
         }
+        if (taskDTO.getExternalTaskId() != null) {
+            taskProtoBuilder.setExternalTaskId(taskDTO.getExternalTaskId());
+        }
+        if (taskDTO.getTaskConfigTemplate() != null) {
+            taskProtoBuilder.setTaskConfigTemplate((DynamicConfigProto) ProtoJsonUtils.fromJson(
+                    JsonUtils.toJson(taskDTO.getTaskConfigTemplate()), DynamicConfigProto.newBuilder()));
+        }
+        if (taskDTO.getAutonomyConfig() != null) {
+            taskProtoBuilder.setAutonomyConfig((AutonomyConfigProto) ProtoJsonUtils.fromJson(
+                    JsonUtils.toJson(taskDTO.getAutonomyConfig()), AutonomyConfigProto.newBuilder()));
+        }
+        if (taskDTO.getExecutionOrder() != null) {
+            taskProtoBuilder.setExecutionOrder(taskDTO.getExecutionOrder());
+        }
+        if (taskDTO.getDecisionEngineEnabled() != null) {
+            taskProtoBuilder.setDecisionEngineEnabled(taskDTO.getDecisionEngineEnabled());
+        }
         return taskProtoBuilder;
+    }
+
+    private static void mapTaskConfig(TaskProtoDTO.Builder builder, TaskDTO taskDTO) {
+        var config = taskDTO.getConfig();
+        if (config == null) {
+            return;
+        }
+        String json = JsonUtils.toJson(config);
+        switch (config) {
+            case WaypointTaskConfig ignored -> builder.setWaypointConfig((WaypointTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, WaypointTaskConfigProto.newBuilder()));
+            case DetectTaskConfig ignored -> builder.setDetectConfig((DetectTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, DetectTaskConfigProto.newBuilder()));
+            case AreaMappingTaskConfig ignored -> builder.setAreaMappingConfig((AreaMappingTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, AreaMappingTaskConfigProto.newBuilder()));
+            case PoiTaskConfig ignored -> builder.setPoiConfig((PoiTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, PoiTaskConfigProto.newBuilder()));
+            case FollowTaskConfig ignored -> builder.setFollowConfig((FollowTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, FollowTaskConfigProto.newBuilder()));
+            case TrackTaskConfig ignored -> builder.setTrackConfig((TrackTaskConfigProto)
+                    ProtoJsonUtils.fromJson(json, TrackTaskConfigProto.newBuilder()));
+            default -> throw new IllegalArgumentException("Unsupported task config: " + config.getClass().getName());
+        }
     }
 
 
@@ -257,7 +368,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<TaskResponse> getTaskByFlightId(String flightId) {
         log.info("Getting task by flightId: flightId={}", flightId);
 
-        var protoRequest = GetTaskRequest.newBuilder()
+        var protoRequest = GetTaskByFlightIdRequest.newBuilder()
                 .setBase(buildBase())
                 .setFlightId(flightId)
                 .build();
@@ -283,7 +394,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<TaskResponse> startTask(String taskId) {
         log.info("Starting task: taskId={}", taskId);
 
-        var protoRequest = StartTaskRequest.newBuilder()
+        var protoRequest = TaskLifecycleRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
@@ -296,7 +407,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     public CompletableFuture<TaskResponse> stopTask(String taskId) {
         log.info("Stopping task: taskId={}", taskId);
 
-        var protoRequest = StopTaskRequest.newBuilder()
+        var protoRequest = TaskLifecycleRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
@@ -308,7 +419,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     @Override
     public CompletableFuture<TaskResponse> pauseTask(String taskId) {
         log.info("Pausing task: taskId={}", taskId);
-        var protoRequest = PauseTaskRequest.newBuilder()
+        var protoRequest = TaskLifecycleRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
@@ -319,7 +430,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     @Override
     public CompletableFuture<TaskResponse> resumeTask(String taskId) {
         log.info("Resume task: taskId={}", taskId);
-        var protoRequest = ResumeTaskRequest.newBuilder()
+        var protoRequest = TaskLifecycleRequest.newBuilder()
                 .setBase(buildBase())
                 .setTaskId(taskId)
                 .build();
@@ -335,14 +446,14 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var schedulerBuilder = mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder(), schedulerDTO);
         var protoRequest = CreateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
-                .setSchedulerDto(schedulerBuilder.build())
+                .setScheduler(schedulerBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.createScheduler(protoRequest))
                 .thenApply(this::toSchedulerResponse);
     }
 
-    private static SchedulerProtoDTO.Builder mapSchedulerDtoToProto(SchedulerProtoDTO.Builder newBuilder, SchedulerDTO schedulerDTO) {
+    public static SchedulerProtoDTO.Builder mapSchedulerDtoToProto(SchedulerProtoDTO.Builder newBuilder, SchedulerDTO schedulerDTO) {
         var schedulerBuilder = newBuilder
                 .setName(schedulerDTO.getName() != null ? schedulerDTO.getName() : "")
                 .setCronExpression(schedulerDTO.getCronExpression() != null ? schedulerDTO.getCronExpression() : "")
@@ -360,6 +471,12 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         if (schedulerDTO.getMissionId() != null) {
             schedulerBuilder.setMissionId(schedulerDTO.getMissionId().toString());
         }
+        if (schedulerDTO.getCreatedAt() != null) {
+            schedulerBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(schedulerDTO.getCreatedAt()));
+        }
+        if (schedulerDTO.getModifiedAt() != null) {
+            schedulerBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(schedulerDTO.getModifiedAt()));
+        }
 
         return schedulerBuilder;
     }
@@ -374,7 +491,7 @@ public class MissionAutonomyImpl implements MissionAutonomy {
         var protoRequest = UpdateSchedulerRequest.newBuilder()
                 .setBase(buildBase())
                 .setSchedulerId(schedulerId)
-                .setSchedulerDto(schedulerBuilder.build())
+                .setScheduler(schedulerBuilder.build())
                 .build();
 
         return executeAsync(() -> futureStub.updateScheduler(protoRequest))
@@ -407,16 +524,14 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                 .thenApply(this::toSchedulerResponse);
     }
 
-    //TODO finish up implemetation on client sdk side for new endpoints
     @Override
     public CompletableFuture<SchedulerResponse> createSchedulers(List<SchedulerDTO> schedulerDTOS) {
         log.info("Creating schedulers: count={}", schedulerDTOS.size());
         var protoRequest = CreateSchedulersRequest.newBuilder()
                 .setBase(buildBase())
-                .addAllSchedulerDtos(schedulerDTOS.stream().map(this::toSchedulerProtoDTO)
+                .addAllSchedulers(schedulerDTOS.stream().map(this::toSchedulerProtoDTO)
                 .collect(Collectors.toList()))
                 .build();
-
         return executeAsync(() -> futureStub.createSchedulers(protoRequest))
                 .thenApply(this::toSchedulerResponse);
     }
@@ -538,8 +653,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasMissionDto()) {
-            var json = ProtoJsonUtils.toJson(proto.getMissionDto());
+        if (proto.hasMission()) {
+            var json = ProtoJsonUtils.toJson(proto.getMission());
             var missionDTO = JsonUtils.fromJson(json, MissionDTO.class);
 
             builder.missionData(missionDTO);
@@ -571,12 +686,35 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasTaskDto()) {
-            var json = ProtoJsonUtils.toJson(proto.getTaskDto());
-            builder.taskData(JsonUtils.fromJson(json, TaskDTO.class));
+        if (proto.hasTask()) {
+            builder.taskData(mapTaskProtoToDto(proto.getTask()));
         }
 
         return builder.build();
+    }
+
+    public static TaskDTO mapTaskProtoToDto(TaskProtoDTO proto) {
+        TaskDTO task = JsonUtils.fromJson(ProtoJsonUtils.toJson(proto), TaskDTO.class);
+        if (proto.hasWaypointConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getWaypointConfig()), WaypointTaskConfig.class));
+        } else if (proto.hasDetectConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getDetectConfig()), DetectTaskConfig.class));
+        } else if (proto.hasAreaMappingConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getAreaMappingConfig()), AreaMappingTaskConfig.class));
+        } else if (proto.hasPoiConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getPoiConfig()), PoiTaskConfig.class));
+        } else if (proto.hasFollowConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getFollowConfig()), FollowTaskConfig.class));
+        } else if (proto.hasTrackConfig()) {
+            task.setConfig(JsonUtils.fromJson(
+                    ProtoJsonUtils.toJson(proto.getTrackConfig()), TrackTaskConfig.class));
+        }
+        return task;
     }
 
     private SchedulerResponse toSchedulerResponse(com.zqnt.utils.mission.proto.SchedulerResponse proto) {
@@ -602,8 +740,8 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     .build());
         }
 
-        if (proto.hasSchedulerDto()) {
-            var json = ProtoJsonUtils.toJson(proto.getSchedulerDto());
+        if (proto.hasScheduler()) {
+            var json = ProtoJsonUtils.toJson(proto.getScheduler());
             builder.schedulerData(JsonUtils.fromJson(json, SchedulerDTO.class));
         }
 

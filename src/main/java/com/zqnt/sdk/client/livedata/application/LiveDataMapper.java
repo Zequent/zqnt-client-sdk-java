@@ -1,19 +1,24 @@
 package com.zqnt.sdk.client.livedata.application;
 
 import com.google.protobuf.Timestamp;
+import com.google.protobuf.Value;
 import com.zqnt.sdk.client.livedata.domains.*;
-import com.zqnt.sdk.client.livedata.domains.LiveDataResponse;
-import com.zqnt.sdk.client.livedata.domains.LiveDataStartLiveStreamRequest;
-import com.zqnt.sdk.client.livedata.domains.LiveDataStopLiveStreamRequest;
-import com.zqnt.utils.common.proto.*;
+import com.zqnt.sdk.client.livedata.domains.StreamTelemetryRequest;
+import com.zqnt.utils.common.proto.GlobalErrorMessage;
+import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtobufHelpers;
-import com.zqnt.utils.edge.sdk.domains.AssetTelemetryData;
-import com.zqnt.utils.edge.sdk.domains.SubAssetTelemetryData;
+import com.zqnt.utils.devicecontrol.proto.ChangeCameraLensRequest;
+import com.zqnt.utils.devicecontrol.proto.ChangeCameraZoomRequest;
+import com.zqnt.utils.devicecontrol.proto.LiveDataServiceCommand;
+import com.zqnt.utils.edge.sdk.domains.TelemetryData;
+import com.zqnt.utils.events.proto.*;
 import com.zqnt.utils.livedata.proto.*;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class LiveDataMapper {
@@ -28,7 +33,7 @@ public class LiveDataMapper {
     /**
      * Maps StreamTelemetryRequest POJO to proto LiveDataStreamTelemetryRequest
      */
-    public LiveDataStreamTelemetryRequest toProtoRequest(StreamTelemetryRequest request) {
+    public com.zqnt.utils.livedata.proto.StreamTelemetryRequest toProtoRequest(StreamTelemetryRequest request) {
         if (request == null) {
             return null;
         }
@@ -37,7 +42,7 @@ public class LiveDataMapper {
                 ? request.getCommand()
                 : LiveDataServiceCommand.LIVE_DATA_COMMAND_START_TELEMETRY_STREAM;
 
-        var builder = LiveDataStreamTelemetryRequest.newBuilder()
+        var builder = com.zqnt.utils.livedata.proto.StreamTelemetryRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), false, false))
                 .setCommand(command);
 
@@ -70,12 +75,8 @@ public class LiveDataMapper {
 
         // Map oneof telemetry fields
         switch (protoResponse.getTelemetryCase()) {
-            case ASSET_TELEMETRY:
-                response.setAssetTelemetry(mapAssetTelemetry(protoResponse.getAssetTelemetry()));
-                response.setEventType(StreamTelemetryResponse.StreamEventType.TELEMETRY);
-                break;
-            case SUB_ASSET_TELEMETRY:
-                response.setSubAssetTelemetry(mapSubAssetTelemetry(protoResponse.getSubAssetTelemetry()));
+            case DATA:
+                response.setTelemetry(mapTelemetry(protoResponse.getData()));
                 response.setEventType(StreamTelemetryResponse.StreamEventType.TELEMETRY);
                 break;
             case ERROR:
@@ -112,12 +113,12 @@ public class LiveDataMapper {
     /**
      * Maps StreamNotificationRequest POJO to proto LiveDataStreamNotificationsRequest
      */
-    public LiveDataStreamNotificationsRequest toProtoStreamNotificationsRequest(StreamNotificationRequest request) {
+    public StreamNotificationsRequest toProtoStreamNotificationsRequest(StreamNotificationRequest request) {
         if (request == null) {
             return null;
         }
 
-        var builder = LiveDataStreamNotificationsRequest.newBuilder()
+        var builder = StreamNotificationsRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), true, true));
 
         if (request.getEventTypes() != null && !request.getEventTypes().isEmpty()) {
@@ -130,7 +131,7 @@ public class LiveDataMapper {
     /**
      * Maps proto LiveDataNotificationResponse to StreamNotificationResponse POJO
      */
-    public StreamNotificationResponse fromProtoNotificationResponse(LiveDataNotificationResponse protoResponse) {
+    public StreamNotificationResponse fromProtoNotificationResponse(NotificationResponse protoResponse) {
         if (protoResponse == null) {
             return null;
         }
@@ -143,16 +144,16 @@ public class LiveDataMapper {
                 .assetId(nullable(protoResponse.hasAssetId(), protoResponse.getAssetId()))
                 .build();
 
-        switch (protoResponse.getEventCase()) {
-            case ASSET_STATUS -> response.setAssetStatus(mapAssetStatusEvent(protoResponse.getAssetStatus()));
-            case TASK_EVENT -> response.setTaskEvent(mapTaskEvent(protoResponse.getTaskEvent()));
-            case OPERATION_EVENT -> response.setOperationEvent(mapOperationEvent(protoResponse.getOperationEvent()));
-            case ERROR -> response.setError(mapNotificationErrorInfo(protoResponse.getError()));
-            case STREAM_HEARTBEAT -> {
-                // Transport liveness is consumed internally by LiveDataImpl.
-            }
-            case EVENT_NOT_SET -> {
-                // No event set
+        if (protoResponse.hasEvent()) {
+            NotificationEvent event = protoResponse.getEvent();
+            switch (event.getEventCase()) {
+                case ASSET_STATUS -> response.setAssetStatus(mapAssetStatusEvent(event.getAssetStatus()));
+                case TASK -> response.setTaskEvent(mapTaskEvent(event.getTask()));
+                case MISSION -> response.setMissionEvent(mapMissionEvent(event.getMission()));
+                case ERROR -> response.setError(mapNotificationErrorInfo(event.getError()));
+                case EVENT_NOT_SET -> {
+                    // No event set
+                }
             }
         }
 
@@ -161,20 +162,35 @@ public class LiveDataMapper {
     }
 
     /**
-     * Maps proto AssetTelemetry to AssetTelemetryData POJO
+     * Maps the unified telemetry proto to the corresponding SDK domain.
      */
-    private AssetTelemetryData mapAssetTelemetry(AssetTelemetry proto) {
+    private TelemetryData mapTelemetry(Telemetry proto) {
         if (proto == null) {
             return null;
         }
 
-        AssetTelemetryData data = AssetTelemetryData.builder()
+        TelemetryData data = TelemetryData.builder()
                 .id(proto.getId())
                 .timestamp(timestampToLocalDateTime(proto.getTimestamp()))
+                .sn(proto.getSn())
                 .latitude(nullable(proto.hasLatitude(), proto.getLatitude()))
                 .longitude(nullable(proto.hasLongitude(), proto.getLongitude()))
                 .absoluteAltitude(nullable(proto.hasAbsoluteAltitude(), proto.getAbsoluteAltitude()))
                 .relativeAltitude(nullable(proto.hasRelativeAltitude(), proto.getRelativeAltitude()))
+                .windSpeed(nullable(proto.hasWindSpeed(), proto.getWindSpeed()))
+                .heading(nullable(proto.hasHeading(), proto.getHeading()))
+                .build();
+
+        if (proto.hasAsset()) {
+            data.setAsset(mapAssetDetails(proto.getAsset()));
+        } else if (proto.hasSubAsset()) {
+            data.setSubAsset(mapSubAssetDetails(proto.getSubAsset()));
+        }
+        return data;
+    }
+
+    private TelemetryData.AssetDetails mapAssetDetails(AssetTelemetryDetails proto) {
+        var data = TelemetryData.AssetDetails.builder()
                 .environmentTemp(nullable(proto.hasEnvironmentTemp(), proto.getEnvironmentTemp()))
                 .insideTemp(nullable(proto.hasInsideTemp(), proto.getInsideTemp()))
                 .humidity(nullable(proto.hasHumidity(), proto.getHumidity()))
@@ -183,21 +199,18 @@ public class LiveDataMapper {
                 .subAssetAtHome(nullable(proto.hasSubAssetAtHome(), proto.getSubAssetAtHome()))
                 .subAssetCharging(nullable(proto.hasSubAssetCharging(), proto.getSubAssetCharging()))
                 .subAssetPercentage(nullable(proto.hasSubAssetPercentage(), proto.getSubAssetPercentage()))
-                .heading(nullable(proto.hasHeading(), proto.getHeading()))
                 .debugModeOpen(nullable(proto.hasDebugModeOpen(), proto.getDebugModeOpen()))
                 .hasActiveManualControlSession(nullable(proto.hasHasActiveManualControlSession(), proto.getHasActiveManualControlSession()))
                 .coverState(nullable(proto.hasCoverState(), proto.getCoverState()))
                 .workingVoltage(nullable(proto.hasWorkingVoltage(), proto.getWorkingVoltage()))
                 .workingCurrent(nullable(proto.hasWorkingCurrent(), proto.getWorkingCurrent()))
                 .supplyVoltage(nullable(proto.hasSupplyVoltage(), proto.getSupplyVoltage()))
-                .windSpeed(nullable(proto.hasWindSpeed(), proto.getWindSpeed()))
                 .positionValid(nullable(proto.hasPositionValid(), proto.getPositionValid()))
                 .manualControlState(nullable(proto.hasManualControlState(), proto.getManualControlState()))
                 .build();
 
-        // Map nested objects
         if (proto.hasSubAssetInformation()) {
-            data.setSubAssetInformation(AssetTelemetryData.SubAssetInformation.builder()
+            data.setSubAssetInformation(TelemetryData.SubAssetInformation.builder()
                     .sn(proto.getSubAssetInformation().getSn())
                     .model(proto.getSubAssetInformation().getModel())
                     .paired(proto.getSubAssetInformation().getPaired())
@@ -206,7 +219,7 @@ public class LiveDataMapper {
         }
 
         if (proto.hasNetworkInformation()) {
-            data.setNetworkInformation(AssetTelemetryData.NetworkInformation.builder()
+            data.setNetworkInformation(TelemetryData.NetworkInformation.builder()
                     .type(proto.getNetworkInformation().getType())
                     .rate(proto.getNetworkInformation().getRate())
                     .quality(proto.getNetworkInformation().getQuality())
@@ -214,13 +227,13 @@ public class LiveDataMapper {
         }
 
         if (proto.hasAirConditioner()) {
-            data.setAirConditioner(AssetTelemetryData.AirConditioner.builder()
+            data.setAirConditioner(TelemetryData.AirConditioner.builder()
                     .state(proto.getAirConditioner().getState())
                     .switchTime(proto.getAirConditioner().getSwitchTime())
                     .build());
         }
         if (proto.hasWirelessLink()) {
-            data.setWirelessLink(AssetTelemetryData.WirelessLinkInformation.builder()
+            data.setWirelessLink(TelemetryData.WirelessLinkInformation.builder()
                     .sdrFreqBand(proto.getWirelessLink().getSdrFreqBand())
                     .sdrLinkState(proto.getWirelessLink().getSdrLinkState())
                     .sdrQuality(proto.getWirelessLink().getSdrQuality())
@@ -235,7 +248,7 @@ public class LiveDataMapper {
         }
 
         if (proto.hasSdrState()) {
-            data.setSdrState(AssetTelemetryData.SdrState.builder()
+            data.setSdrState(TelemetryData.SdrState.builder()
                     .downQuality(proto.getSdrState().getDownQuality())
                     .upQuality(proto.getSdrState().getUpQuality())
                     .frequencyBand(proto.getSdrState().getFrequencyBand())
@@ -243,7 +256,7 @@ public class LiveDataMapper {
         }
 
         if (proto.hasPositionState()) {
-            data.setPositionState(com.zqnt.utils.edge.sdk.domains.AssetTelemetryData.PositionState.builder()
+            data.setPositionState(TelemetryData.PositionState.builder()
                     .gpsNumber(proto.getPositionState().getGpsNumber())
                     .rtkNumber(proto.getPositionState().getRtkNumber())
                     .quality(proto.getPositionState().getQuality())
@@ -254,25 +267,13 @@ public class LiveDataMapper {
     }
 
     /**
-     * Maps proto SubAssetTelemetry to SubAssetTelemetryData POJO
+     * Maps sub-asset-specific telemetry details, including component telemetry.
      */
-    private SubAssetTelemetryData mapSubAssetTelemetry(SubAssetTelemetry proto) {
-        if (proto == null) {
-            return null;
-        }
-
-        SubAssetTelemetryData data = SubAssetTelemetryData.builder()
-                .id(proto.getId())
-                .timestamp(timestampToLocalDateTime(proto.getTimestamp()))
-                .latitude(nullable(proto.hasLatitude(), proto.getLatitude()))
-                .longitude(nullable(proto.hasLongitude(), proto.getLongitude()))
-                .absoluteAltitude(nullable(proto.hasAbsoluteAltitude(), proto.getAbsoluteAltitude()))
-                .relativeAltitude(nullable(proto.hasRelativeAltitude(), proto.getRelativeAltitude()))
+    private TelemetryData.SubAssetDetails mapSubAssetDetails(SubAssetTelemetryDetails proto) {
+        TelemetryData.SubAssetDetails data = TelemetryData.SubAssetDetails.builder()
                 .horizontalSpeed(nullable(proto.hasHorizontalSpeed(), proto.getHorizontalSpeed()))
                 .verticalSpeed(nullable(proto.hasVerticalSpeed(), proto.getVerticalSpeed()))
-                .windSpeed(nullable(proto.hasWindSpeed(), proto.getWindSpeed()))
                 .windDirection(nullable(proto.hasWindDirection(), proto.getWindDirection()))
-                .heading(nullable(proto.hasHeading(), proto.getHeading()))
                 .gear(nullable(proto.hasGear(), proto.getGear()))
                 .heightLimit(nullable(proto.hasHeightLimit(), proto.getHeightLimit()))
                 .homeDistance(nullable(proto.hasHomeDistance(), proto.getHomeDistance()))
@@ -284,7 +285,7 @@ public class LiveDataMapper {
 
         // Map battery information
         if (proto.hasBatteryInformation()) {
-            data.setBatteryInformation(SubAssetTelemetryData.BatteryInformation.builder()
+            data.setBatteryInformation(TelemetryData.BatteryInformation.builder()
                     .percentage(proto.getBatteryInformation().getPercentage())
                     .remainingTime(proto.getBatteryInformation().getRemainingTime())
                     .returnToHomePower(proto.getBatteryInformation().getReturnToHomePower())
@@ -294,43 +295,88 @@ public class LiveDataMapper {
         // Map payload telemetry
         if (proto.hasPayloadTelemetry()) {
             var payloadProto = proto.getPayloadTelemetry();
-            var payload = SubAssetTelemetryData.PayloadTelemetry.builder()
+            var payload = TelemetryData.PayloadTelemetry.builder()
                     .id(payloadProto.getId())
                     .timestamp(timestampToLocalDateTime(payloadProto.getTimestamp()))
                     .name(payloadProto.getName())
                     .build();
 
             if (payloadProto.hasCameraData()) {
-                var cameraData = payloadProto.getCameraData();
-                payload.setCameraData(SubAssetTelemetryData.CameraData.builder()
-                        .currentLens(cameraData.getCurrentLens())
-                        .gimbalPitch(cameraData.getGimbalPitch())
-                        .gimbalYaw(cameraData.getGimbalYaw())
-                        .gimbalRoll(cameraData.getGimbalRoll())
-                        .zoomFactor(cameraData.getZoomFactor())
-                        .build());
+                payload.setCameraData(mapCameraData(payloadProto.getCameraData()));
             }
 
             if (payloadProto.hasRangeFinderData()) {
                 var rangeFinderData = payloadProto.getRangeFinderData();
-                payload.setRangeFinderData(SubAssetTelemetryData.RangeFinderData.builder()
-                        .targetLatitude(rangeFinderData.getTargetLatitude())
-                        .targetLongitude(rangeFinderData.getTargetLongitude())
-                        .targetDistance(rangeFinderData.getTargetDistance())
-                        .targetAltitude(rangeFinderData.getTargetAltitude())
-                        .build());
+                payload.setRangeFinderData(mapRangeFinderData(rangeFinderData));
             }
 
             if (payloadProto.hasSensorData()) {
-                payload.setSensorData(SubAssetTelemetryData.SensorData.builder()
-                        .targetTemperature(payloadProto.getSensorData().getTargetTemperature())
-                        .build());
+                payload.setSensorData(mapSensorData(payloadProto.getSensorData()));
             }
 
             data.setPayloadTelemetry(payload);
         }
 
+        data.setComponentTelemetry(proto.getComponentTelemetryList().stream()
+                .map(this::mapComponentTelemetry)
+                .toList());
+
         return data;
+    }
+
+    private TelemetryData.ComponentTelemetryData mapComponentTelemetry(ComponentTelemetry proto) {
+        var builder = TelemetryData.ComponentTelemetryData.builder()
+                .componentId(proto.getComponentId())
+                .externalId(nullable(proto.hasExternalId(), proto.getExternalId()))
+                .kind(nullable(proto.hasKind(), proto.getKind()))
+                .timestamp(proto.hasTimestamp() ? timestampToLocalDateTime(proto.getTimestamp()) : null)
+                .attributes(proto.hasAttributes() ? structToMap(proto.getAttributes().getFieldsMap()) : Map.of());
+        if (proto.hasCameraData()) builder.cameraData(mapCameraData(proto.getCameraData()));
+        if (proto.hasRangeFinderData()) builder.rangeFinderData(mapRangeFinderData(proto.getRangeFinderData()));
+        if (proto.hasSensorData()) builder.sensorData(mapSensorData(proto.getSensorData()));
+        return builder.build();
+    }
+
+    private TelemetryData.CameraData mapCameraData(PayloadTelemetry.CameraData proto) {
+        return TelemetryData.CameraData.builder()
+                .currentLens(proto.getCurrentLens())
+                .gimbalPitch(proto.getGimbalPitch())
+                .gimbalYaw(proto.getGimbalYaw())
+                .gimbalRoll(proto.getGimbalRoll())
+                .zoomFactor(proto.getZoomFactor())
+                .build();
+    }
+
+    private TelemetryData.RangeFinderData mapRangeFinderData(PayloadTelemetry.RangeFinderData proto) {
+        return TelemetryData.RangeFinderData.builder()
+                .targetLatitude(proto.getTargetLatitude())
+                .targetLongitude(proto.getTargetLongitude())
+                .targetDistance(proto.getTargetDistance())
+                .targetAltitude(proto.getTargetAltitude())
+                .build();
+    }
+
+    private TelemetryData.SensorData mapSensorData(PayloadTelemetry.SensorData proto) {
+        return TelemetryData.SensorData.builder()
+                .targetTemperature(proto.getTargetTemperature())
+                .build();
+    }
+
+    private Map<String, Object> structToMap(Map<String, Value> fields) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        fields.forEach((key, value) -> result.put(key, valueToObject(value)));
+        return result;
+    }
+
+    private Object valueToObject(Value value) {
+        return switch (value.getKindCase()) {
+            case NULL_VALUE, KIND_NOT_SET -> null;
+            case NUMBER_VALUE -> value.getNumberValue();
+            case STRING_VALUE -> value.getStringValue();
+            case BOOL_VALUE -> value.getBoolValue();
+            case STRUCT_VALUE -> structToMap(value.getStructValue().getFieldsMap());
+            case LIST_VALUE -> value.getListValue().getValuesList().stream().map(this::valueToObject).toList();
+        };
     }
 
     /**
@@ -376,13 +422,13 @@ public class LiveDataMapper {
                 .build();
     }
 
-    private StreamNotificationResponse.OperationEvent mapOperationEvent(OperationEvent proto) {
+    private StreamNotificationResponse.MissionEvent mapMissionEvent(MissionEvent proto) {
         if (proto == null) {
             return null;
         }
 
-        return StreamNotificationResponse.OperationEvent.builder()
-                .operationId(proto.getOperationId())
+        return StreamNotificationResponse.MissionEvent.builder()
+                .missionId(proto.getMissionId())
                 .missionType(proto.getMissionType())
                 .status(proto.getStatus())
                 .message(nullable(proto.hasMessage(), proto.getMessage()))
@@ -401,12 +447,16 @@ public class LiveDataMapper {
                 .build();
     }
 
-    private NotificationEventType resolveNotificationEventType(LiveDataNotificationResponse protoResponse) {
-        return switch (protoResponse.getEventCase()) {
+    private NotificationEventType resolveNotificationEventType(NotificationResponse protoResponse) {
+        if (!protoResponse.hasEvent()) {
+            return null;
+        }
+        return switch (protoResponse.getEvent().getEventCase()) {
             case ASSET_STATUS -> NotificationEventType.NOTIFICATION_EVENT_ASSET_STATUS;
-            case TASK_EVENT -> NotificationEventType.NOTIFICATION_EVENT_TASK;
-            case OPERATION_EVENT -> NotificationEventType.NOTIFICATION_EVENT_OPERATION;
-            case ERROR, STREAM_HEARTBEAT, EVENT_NOT_SET -> null;
+            case TASK -> NotificationEventType.NOTIFICATION_EVENT_TASK;
+            case MISSION -> NotificationEventType.NOTIFICATION_EVENT_MISSION;
+            case ASSET_RUNTIME -> NotificationEventType.NOTIFICATION_EVENT_ASSET_RUNTIME;
+            case ERROR, EVENT_NOT_SET -> null;
         };
     }
 
@@ -434,19 +484,19 @@ public class LiveDataMapper {
     /**
      * Maps LiveDataStartLiveStreamRequest POJO to proto
      */
-    public com.zqnt.utils.livedata.proto.LiveDataStartLiveStreamRequest toProtoStartLiveStreamRequest(
+    public com.zqnt.utils.devicecontrol.proto.LiveStreamStartCommandRequest toProtoStartLiveStreamRequest(
             LiveDataStartLiveStreamRequest request) {
         if (request == null) {
             return null;
         }
 
-        var requestBuilder = com.zqnt.utils.livedata.proto.LiveStreamStartRequest.newBuilder()
+        var requestBuilder = com.zqnt.utils.devicecontrol.proto.LiveStreamStartCommandPayload.newBuilder()
                 .setVideoId(request.getVideoId())
                 .setStreamServer(request.getStreamServer())
                 .setStreamType(request.getStreamType())
                 .setAssetType(request.getAssetType());
 
-        return com.zqnt.utils.livedata.proto.LiveDataStartLiveStreamRequest.newBuilder()
+        return com.zqnt.utils.devicecontrol.proto.LiveStreamStartCommandRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), null, true, false))
                 .setRequest(requestBuilder.build())
                 .build();
@@ -455,43 +505,23 @@ public class LiveDataMapper {
     /**
      * Maps LiveDataStopLiveStreamRequest POJO to proto
      */
-    public com.zqnt.utils.livedata.proto.LiveDataStopLiveStreamRequest toProtoStopLiveStreamRequest(
+    public com.zqnt.utils.devicecontrol.proto.LiveStreamStopCommandRequest toProtoStopLiveStreamRequest(
             LiveDataStopLiveStreamRequest request) {
         if (request == null) {
             return null;
         }
 
-        var requestBuilder = com.zqnt.utils.livedata.proto.LiveStreamStopRequest.newBuilder()
+        var requestBuilder = com.zqnt.utils.devicecontrol.proto.LiveStreamStopCommandPayload.newBuilder()
                 .setVideoId(request.getVideoId());
 
-        return com.zqnt.utils.livedata.proto.LiveDataStopLiveStreamRequest.newBuilder()
+        return com.zqnt.utils.devicecontrol.proto.LiveStreamStopCommandRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), true, false))
                 .setRequest(requestBuilder.build())
                 .build();
     }
 
-    /**
-     * Maps proto LiveDataResponse to POJO
-     */
-    public LiveDataResponse fromProtoLiveDataResponse(
-            com.zqnt.utils.livedata.proto.LiveDataResponse protoResponse) {
-        if (protoResponse == null) {
-            return null;
-        }
-
-        return LiveDataResponse.builder()
-                .tid(protoResponse.getTid())
-                .timestamp(timestampToLocalDateTime(protoResponse.getTimestamp()))
-                .hasErrors(protoResponse.getHasErrors())
-                .sn(protoResponse.getSn())
-                .assetId(nullable(protoResponse.hasAssetId(), protoResponse.getAssetId()))
-                .responseMessage(nullable(protoResponse.hasResponseMessage(), protoResponse.getResponseMessage()))
-                .build();
-    }
-
-
-    public LiveDataChangeLensRequest toProtoChangeLensRequest(ChangeLensRequest request) {
-        return LiveDataChangeLensRequest.newBuilder()
+    public com.zqnt.utils.devicecontrol.proto.ChangeCameraLensCommandRequest toProtoChangeLensRequest(ChangeLensRequest request) {
+        return com.zqnt.utils.devicecontrol.proto.ChangeCameraLensCommandRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), false, true))
                 .setRequest(ChangeCameraLensRequest.newBuilder()
                         .setLens(request.getLens())
@@ -500,8 +530,8 @@ public class LiveDataMapper {
     }
 
 
-    public LiveDataChangeZoomRequest toProtoChangeZoomRequest(ChangeZoomRequest request) {
-        return LiveDataChangeZoomRequest.newBuilder()
+    public com.zqnt.utils.devicecontrol.proto.ChangeCameraZoomCommandRequest toProtoChangeZoomRequest(ChangeZoomRequest request) {
+        return com.zqnt.utils.devicecontrol.proto.ChangeCameraZoomCommandRequest.newBuilder()
                 .setBase(requestBase(request.getSn(), request.getTid(), false, true))
                 .setRequest(ChangeCameraZoomRequest.newBuilder()
                         .setLens(request.getLens())

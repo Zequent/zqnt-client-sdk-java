@@ -6,11 +6,12 @@ import com.zqnt.sdk.client.grpc.GrpcResilience;
 import com.zqnt.sdk.client.remotecontrol.application.ManualControlInputSession;
 import com.zqnt.sdk.client.remotecontrol.application.RemoteControl;
 import com.zqnt.sdk.client.remotecontrol.domains.*;
-import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
-import com.zqnt.utils.common.proto.Coordinates;
+import com.zqnt.sdk.client.remotecontrol.domains.ManualControlRequest;
+import com.zqnt.sdk.client.remotecontrol.domains.ReturnToHomeRequest;
 import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtobufHelpers;
-import com.zqnt.utils.remotecontrol.proto.*;
+import com.zqnt.utils.devicecontrol.proto.*;
+import com.zqnt.utils.remotecontrol.proto.RemoteControlServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,8 @@ public class RemoteControlImpl implements RemoteControl {
 	private final GrpcResilience resilience;
 	private final GrpcClientConfig config;
 	private final ScheduledExecutorService timeoutScheduler;
+	private final CustomCommandMapper customCommandMapper = new CustomCommandMapper();
+	private final CapabilityMapper capabilityMapper = new CapabilityMapper();
 
 	/**
 	 * Private constructor - use create() factory method.
@@ -77,9 +80,9 @@ public class RemoteControlImpl implements RemoteControl {
 		validateCoordinates(request.getLatitude(), request.getLongitude(), request.getAltitude());
 		log.info("Takeoff: sn={}", request.getSn());
 
-		var protoRequest = com.zqnt.utils.remotecontrol.proto.RemoteControlTakeOffRequest.newBuilder()
+		var protoRequest = CoordinateCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setRequest(com.zqnt.utils.common.proto.Coordinates.newBuilder()
+				.setCoordinate(GeoCoordinate.newBuilder()
 						.setLatitude(request.getLatitude())
 						.setLongitude(request.getLongitude())
 						.setAltitude(request.getAltitude())
@@ -96,9 +99,9 @@ public class RemoteControlImpl implements RemoteControl {
 		validateCoordinates(request.getLatitude(), request.getLongitude(), request.getAltitude());
 		log.info("GoTo: sn={}", request.getSn());
 
-		var protoRequest = RemoteControlGoToRequest.newBuilder()
+		var protoRequest = CoordinateCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setRequest(Coordinates.newBuilder()
+				.setCoordinate(GeoCoordinate.newBuilder()
 						.setLatitude(request.getLatitude())
 						.setLongitude(request.getLongitude())
 						.setAltitude(request.getAltitude())
@@ -115,12 +118,12 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("ReturnToHome: sn={}", request.getSn());
 
-		var rthBuilder = com.zqnt.utils.common.proto.ReturnToHomeRequest.newBuilder();
+		var rthBuilder = com.zqnt.utils.devicecontrol.proto.ReturnToHomeRequest.newBuilder();
 		if (request.getAltitude() != null) {
 			rthBuilder.setAltitude(request.getAltitude());
 		}
 
-		var protoRequest = RemoteControlReturnToHomeRequest.newBuilder()
+		var protoRequest = ReturnToHomeCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.setRequest(rthBuilder.build())
 				.build();
@@ -135,9 +138,9 @@ public class RemoteControlImpl implements RemoteControl {
 		validateCoordinates(request.getLatitude(), request.getLongitude(), request.getAltitude());
 		log.info("LookAt: sn={}", request.getSn());
 
-		var protoRequest = RemoteControlLookAtRequest.newBuilder()
+		var protoRequest = LookAtCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setRequest(Coordinates.newBuilder()
+				.setCoordinate(GeoCoordinate.newBuilder()
 						.setLatitude(request.getLatitude())
 						.setLongitude(request.getLongitude())
 						.setAltitude(request.getAltitude())
@@ -163,7 +166,7 @@ public class RemoteControlImpl implements RemoteControl {
 		}
 		log.info("EnterManualControl: sn={}", request.getSn());
 
-		var manualControlBuilder = com.zqnt.utils.common.proto.ManualControlRequest.newBuilder()
+		var manualControlBuilder = com.zqnt.utils.devicecontrol.proto.ManualControlRequest.newBuilder()
 				.setClientId(request.getClientId())
 				.setUserId(request.getUserId())
 				.setSessionId(request.getSessionId());
@@ -172,7 +175,7 @@ public class RemoteControlImpl implements RemoteControl {
 			manualControlBuilder.setReason(request.getReason());
 		}
 
-		var protoRequest = RemoteControlManualControlRequest.newBuilder()
+		var protoRequest = ManualControlCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.setRequest(manualControlBuilder.build())
 				.build();
@@ -196,7 +199,7 @@ public class RemoteControlImpl implements RemoteControl {
 		}
 		log.info("ExitManualControl: sn={}", request.getSn());
 
-		var manualControlBuilder = com.zqnt.utils.common.proto.ManualControlRequest.newBuilder()
+		var manualControlBuilder = com.zqnt.utils.devicecontrol.proto.ManualControlRequest.newBuilder()
 				.setClientId(request.getClientId())
 				.setUserId(request.getUserId())
 				.setSessionId(request.getSessionId());
@@ -205,7 +208,7 @@ public class RemoteControlImpl implements RemoteControl {
 			manualControlBuilder.setReason(request.getReason());
 		}
 
-		var protoRequest = RemoteControlManualControlRequest.newBuilder()
+		var protoRequest = ManualControlCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.setRequest(manualControlBuilder.build())
 				.build();
@@ -220,13 +223,13 @@ public class RemoteControlImpl implements RemoteControl {
 		log.info("Starting manual control input session for SN: {}", sn);
 
 		// CompletableFuture to capture the final response
-		var responseFuture = new CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse>();
+		var responseFuture = new CompletableFuture<CommandResponse>();
 
 		// Response observer to handle server responses
-		StreamObserver<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> responseObserver =
+		StreamObserver<CommandResponse> responseObserver =
 			new StreamObserver<>() {
 				@Override
-				public void onNext(com.zqnt.utils.remotecontrol.proto.RemoteControlResponse response) {
+				public void onNext(CommandResponse response) {
 					responseFuture.complete(response);
 				}
 
@@ -243,7 +246,7 @@ public class RemoteControlImpl implements RemoteControl {
 			};
 
 		// Start bidirectional streaming - returns request observer
-		StreamObserver<RemoteControlManualControlInputRequest> requestObserver =
+		StreamObserver<ManualControlInputCommandRequest> requestObserver =
 			asyncStub.manualControlInput(responseObserver);
 
 		return new ManualControlInputSessionImpl(sn, config.getRequestTimeoutSeconds(), responseFuture, requestObserver);
@@ -254,7 +257,7 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("OpenCover: sn={}", request.getSn());
 
-		var protoRequest = RemoteControlOpenCoverRequest.newBuilder()
+		var protoRequest = EmptyCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.build();
 
@@ -267,7 +270,7 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("CloseCover: sn={}, force={}", request.getSn(), request.getValue());
 
-		var builder = RemoteControlCloseCoverRequest.newBuilder()
+		var builder = CloseCoverCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()));
 
 		if (request.getValue() != null) {
@@ -283,7 +286,7 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("StartCharging: sn={}", request.getSn());
 
-		var protoRequest = RemoteControlStartChargingRequest.newBuilder()
+		var protoRequest = EmptyCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.build();
 
@@ -296,7 +299,7 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("StopCharging: sn={}", request.getSn());
 
-		var protoRequest = RemoteControlStopChargingRequest.newBuilder()
+		var protoRequest = EmptyCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.build();
 
@@ -309,7 +312,7 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("RebootAsset: sn={}", request.getSn());
 
-		var protoRequest = RemoteControlRebootAssetRequest.newBuilder()
+		var protoRequest = EmptyCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.build();
 
@@ -322,9 +325,9 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("BootSubAsset: sn={}, boot={}", request.getSn(), request.getValue());
 
-		var protoRequest = RemoteControlBootSubAssetRequest.newBuilder()
+		var protoRequest = ToggleCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
-				.setBootUp(request.getValue() != null && request.getValue())
+				.setEnabled(request.getValue() != null && request.getValue())
 				.build();
 
 		return executeAsync(observer -> asyncStub.bootSubAsset(protoRequest, observer))
@@ -336,12 +339,12 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("DebugMode: sn={}, enabled={}", request.getSn(), request.getValue());
 
-		var protoRequest = RemoteControlDebugModeRequest.newBuilder()
+		var protoRequest = ToggleCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.setEnabled(request.getValue() != null && request.getValue())
 				.build();
 
-		return executeAsync(observer -> asyncStub.enterOrCloseRemoteDebugMode(protoRequest, observer))
+		return executeAsync(observer -> asyncStub.setRemoteDebugMode(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
 	}
 
@@ -350,7 +353,7 @@ public class RemoteControlImpl implements RemoteControl {
 		validateSn(request.getSn());
 		log.info("ChangeAcMode: sn={}", request.getSn());
 
-		var protoRequest = RemoteControlChangeAcModeRequest.newBuilder()
+		var protoRequest = ChangeAcModeCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.build();
 
@@ -361,11 +364,54 @@ public class RemoteControlImpl implements RemoteControl {
 	@Override
 	public CompletableFuture<RemoteControlResponse> takePhoto(DockOperationRequest request) {
 		validateSn(request.getSn());
-		var protoRequest = RemoteControlTakePhotoRequest.newBuilder()
+		var protoRequest = EmptyCommandRequest.newBuilder()
 				.setBase(buildBase(request.getSn()))
 				.build();
-		return executeAsync(observer -> asyncStub.takePhoto(protoRequest, observer))
+		return executeAsync(observer -> asyncStub.capturePhoto(protoRequest, observer))
 				.thenApply(proto -> toResponse(proto, request.getSn()));
+	}
+
+	@Override
+	public CompletableFuture<RemoteControlResponse> liveStreamSplitScreen(LiveStreamSplitScreenRequest request) {
+		validateSn(request.getSn());
+		log.info("LiveStreamSplitScreen: sn={}, enabled={}", request.getSn(), request.isEnabled());
+
+		var protoRequest = ToggleCommandRequest.newBuilder()
+				.setBase(buildBase(request.getSn(), request.getAssetId()))
+				.setEnabled(request.isEnabled())
+				.build();
+
+		return executeAsync(observer -> asyncStub.liveStreamSplitScreen(protoRequest, observer))
+				.thenApply(proto -> toResponse(proto, request.getSn()));
+	}
+
+	@Override
+	public CompletableFuture<CapabilitySnapshot> getCapabilities(String sn) {
+		validateSn(sn);
+		AssetCapabilitiesRequest request = AssetCapabilitiesRequest.newBuilder()
+				.setSn(sn).setBase(buildBase(sn)).build();
+		return executeCapabilitiesAsync(observer -> asyncStub.getCapabilities(request, observer))
+				.thenApply(capabilityMapper::fromProto);
+	}
+
+	@Override
+	public CompletableFuture<com.zqnt.sdk.client.remotecontrol.domains.CustomCommandResponse> sendCustomCommand(
+			com.zqnt.sdk.client.remotecontrol.domains.CustomCommandRequest request) {
+		var protoRequest = customCommandMapper.toProto(request);
+
+		return executeCustomCommandAsync(observer -> asyncStub.sendCustomCommand(protoRequest, observer))
+				.thenApply(proto -> customCommandMapper.fromProto(proto, request.getSn()));
+	}
+
+	private CompletableFuture<AssetCapabilitiesResponse> executeCapabilitiesAsync(
+			java.util.function.Consumer<StreamObserver<AssetCapabilitiesResponse>> stubCall) {
+		CompletableFuture<AssetCapabilitiesResponse> future = new CompletableFuture<>();
+		stubCall.accept(new StreamObserver<>() {
+			@Override public void onNext(AssetCapabilitiesResponse value) { future.complete(value); }
+			@Override public void onError(Throwable error) { future.completeExceptionally(error); }
+			@Override public void onCompleted() { }
+		});
+		return future;
 	}
 
 	private static void validateSn(String sn) {
@@ -393,10 +439,17 @@ public class RemoteControlImpl implements RemoteControl {
 	}
 
 	private com.zqnt.utils.common.proto.RequestBase buildBase(String sn) {
+		return buildBase(sn, null);
+	}
+
+	private com.zqnt.utils.common.proto.RequestBase buildBase(String sn, String assetId) {
 		var builder = RequestBase.newBuilder()
 				.setSn(sn)
 				.setTid(UUID.randomUUID().toString())
 				.setTimestamp(ProtobufHelpers.now());
+		if (assetId != null && !assetId.isBlank()) {
+			builder.setAssetId(assetId);
+		}
 
 		return builder.build();
 	}
@@ -405,12 +458,12 @@ public class RemoteControlImpl implements RemoteControl {
 	 * Execute async gRPC call with resilience and timeout using StreamObserver pattern.
 	 * AsyncStub is the most performant approach (callback-based, non-blocking).
 	 */
-	private CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> executeAsync(
-			java.util.function.Consumer<StreamObserver<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse>> stubCall) {
+	private CompletableFuture<CommandResponse> executeAsync(
+			java.util.function.Consumer<StreamObserver<CommandResponse>> stubCall) {
 		int timeout = config.getRequestTimeoutSeconds();
 
 		return resilience.executeWithResilienceAsync(() -> {
-			CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> future = new CompletableFuture<>();
+			CompletableFuture<CommandResponse> future = new CompletableFuture<>();
 			AtomicBoolean completed = new AtomicBoolean(false);
 
 			// Set timeout
@@ -421,9 +474,9 @@ public class RemoteControlImpl implements RemoteControl {
 			}, timeout, TimeUnit.SECONDS);
 
 			// StreamObserver for callback-based async handling
-			StreamObserver<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> observer = new StreamObserver<>() {
+			StreamObserver<CommandResponse> observer = new StreamObserver<>() {
 				@Override
-				public void onNext(com.zqnt.utils.remotecontrol.proto.RemoteControlResponse response) {
+				public void onNext(CommandResponse response) {
 					if (completed.compareAndSet(false, true)) {
 						timeoutTask.cancel(false);
 						future.complete(response);
@@ -451,6 +504,43 @@ public class RemoteControlImpl implements RemoteControl {
 		});
 	}
 
+	private CompletableFuture<com.zqnt.utils.devicecontrol.proto.CustomCommandResponse> executeCustomCommandAsync(
+			java.util.function.Consumer<StreamObserver<com.zqnt.utils.devicecontrol.proto.CustomCommandResponse>> stubCall) {
+		int timeout = config.getRequestTimeoutSeconds();
+		return resilience.executeWithResilienceAsync(() -> {
+			CompletableFuture<com.zqnt.utils.devicecontrol.proto.CustomCommandResponse> future = new CompletableFuture<>();
+			AtomicBoolean completed = new AtomicBoolean(false);
+			ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+				if (completed.compareAndSet(false, true)) {
+					future.completeExceptionally(
+							new TimeoutException("Custom command timed out after " + timeout + "s"));
+				}
+			}, timeout, TimeUnit.SECONDS);
+
+			StreamObserver<com.zqnt.utils.devicecontrol.proto.CustomCommandResponse> observer = new StreamObserver<>() {
+				@Override
+				public void onNext(com.zqnt.utils.devicecontrol.proto.CustomCommandResponse response) {
+					if (completed.compareAndSet(false, true)) {
+						timeoutTask.cancel(false);
+						future.complete(response);
+					}
+				}
+
+				@Override
+				public void onError(Throwable error) {
+					if (completed.compareAndSet(false, true)) {
+						timeoutTask.cancel(false);
+						future.completeExceptionally(error);
+					}
+				}
+
+				@Override public void onCompleted() { }
+			};
+			stubCall.accept(observer);
+			return future;
+		});
+	}
+
 	/**
 	 * Shutdown executors when done.
 	 * Should be called when closing the client.
@@ -467,13 +557,14 @@ public class RemoteControlImpl implements RemoteControl {
 		}
 	}
 
-	private TakeoffResponse toTakeoffResponse(com.zqnt.utils.remotecontrol.proto.RemoteControlResponse proto, String sn) {
+	private TakeoffResponse toTakeoffResponse(CommandResponse proto, String sn) {
+		var meta = proto.getMeta();
 		return TakeoffResponse.builder()
 				.success(!proto.getHasErrors())
 				.sn(sn)
-				.tid(proto.getTid())
-				.message(proto.hasResponseMessage() ? proto.getResponseMessage() : null)
-				.assetId(proto.hasAssetId() ? proto.getAssetId() : null)
+				.tid(meta.getTid())
+				.message(meta.hasResponseMessage() ? meta.getResponseMessage() : null)
+				.assetId(meta.hasAssetId() ? meta.getAssetId() : null)
 				.error(proto.hasError() ? TakeoffResponse.ErrorInfo.builder()
 						.errorCode(proto.getError().getErrorCode().name())
 						.errorMessage(proto.getError().getErrorMessage())
@@ -488,13 +579,14 @@ public class RemoteControlImpl implements RemoteControl {
 	}
 
 	private RemoteControlResponse toResponse(
-			com.zqnt.utils.remotecontrol.proto.RemoteControlResponse proto, String sn) {
+			CommandResponse proto, String sn) {
+		var meta = proto.getMeta();
 		return RemoteControlResponse.builder()
 				.success(!proto.getHasErrors())
 				.sn(sn)
-				.tid(proto.getTid())
-				.message(proto.hasResponseMessage() ? proto.getResponseMessage() : null)
-				.assetId(proto.hasAssetId() ? proto.getAssetId() : null)
+				.tid(meta.getTid())
+				.message(meta.hasResponseMessage() ? meta.getResponseMessage() : null)
+				.assetId(meta.hasAssetId() ? meta.getAssetId() : null)
 				.error(proto.hasError() ? RemoteControlResponse.ErrorInfo.builder()
 						.errorCode(proto.getError().getErrorCode().name())
 						.errorMessage(proto.getError().getErrorMessage())
@@ -507,4 +599,5 @@ public class RemoteControlImpl implements RemoteControl {
 						.build() : null)
 				.build();
 	}
+
 }

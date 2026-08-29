@@ -1,6 +1,6 @@
 package com.zqnt.sdk.client.livedata.domains;
 
-import com.zqnt.utils.common.proto.LiveDataServiceCommand;
+import com.zqnt.utils.devicecontrol.proto.LiveDataServiceCommand;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

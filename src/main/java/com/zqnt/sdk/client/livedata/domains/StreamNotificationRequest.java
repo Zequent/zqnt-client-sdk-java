@@ -1,6 +1,6 @@
 package com.zqnt.sdk.client.livedata.domains;
 
-import com.zqnt.utils.livedata.proto.NotificationEventType;
+import com.zqnt.utils.events.proto.NotificationEventType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

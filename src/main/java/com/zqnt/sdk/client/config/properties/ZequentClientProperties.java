@@ -43,6 +43,10 @@ public interface ZequentClientProperties {
     @WithName("live-data-service")
     ServiceProperties liveDataService();
 
+    /** Connector Service configuration. */
+    @WithName("connector-service")
+    ServiceProperties connectorService();
+
     /**
      * Global resilience configuration.
      */

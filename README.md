@@ -52,6 +52,8 @@ zequent.remote-control-service.host=localhost
 zequent.remote-control-service.port=8002
 zequent.live-data-service.host=localhost
 zequent.live-data-service.port=8003
+zequent.connector-service.host=localhost
+zequent.connector-service.port=8010
 ```
 
 **Usage:**
@@ -64,8 +66,56 @@ public class DroneService {
     public void handleTelemetry() {
         zequent.liveData().streamTelemetryData();
     }
+
+    public CompletableFuture<ConnectorResponse> findAsset(String sn) {
+        ConnectorRequestContext context = ConnectorRequestContext.builder()
+                .sn(sn)
+                .tid(UUID.randomUUID().toString())
+                .build();
+        return zequent.connector().getAssetBySn(
+                GetAssetBySnRequest.builder().context(context).build()
+        );
+    }
 }
 ```
+
+### Dynamic payload commands
+
+Dynamic payload commands run through `remoteControl()`. Discover the current capabilities first:
+their target reference is the authoritative routing value for the command.
+
+The client flow is:
+
+1. Call `remoteControl().getCapabilities(dockSn)`.
+2. Select the advertised logical command.
+3. Build the request with `CustomCommandRequest.forCapability(...)` so its `targetRef` is retained.
+4. Send the command and check `CustomCommandResponse.success`, `error`, and `result`.
+
+The `vendorMethod` from the discovered definition is intentionally not sent by the client. The edge
+adapter resolves the stable logical command to the vendor-specific implementation.
+
+```java
+String dockSn = "YOUR_DOCK_SN";
+
+return zequent.remoteControl().getCapabilities(dockSn).thenCompose(snapshot -> {
+    var capability = snapshot.getCapabilities().stream()
+            .filter(value -> "parachute.led.set".equals(value.getCommandId()))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("Parachute capability is unavailable"));
+
+    // value: 1 = on, 0 = off. Widget index 1 is added by the adapter.
+    return zequent.remoteControl().sendCustomCommand(
+            CustomCommandRequest.forCapability(dockSn, capability, Map.of("value", 1)));
+});
+```
+
+If `parachute.led.set` is absent, the payload was not recognized as `PARACHUTE`; its current PSDK
+name must contain `flyfire` or `parachute`.
+
+The complete executable example is
+[`PayloadCustomCommandIntegrationTest`](src/test/java/com/zqnt/sdk/client/PayloadCustomCommandIntegrationTest.java).
+Its first test only discovers and constructs the request. The second test changes hardware state and
+therefore runs only with `-Dpayload.command.execution.enabled=true`.
 
 **That's it!** The SDK auto-configures via `ZequentClientProducer` (CDI).
 
@@ -80,11 +130,12 @@ public class ZequentConfig {
 
     @Bean
     public ZequentClient zequentClient() {
-        // Uses defaults: localhost:8002, 8004, 8003
+        // Uses defaults: localhost:8002, 8004, 8003, 8010
         return ZequentClient.builder()
                 .remoteControl().done()
                 .missionAutonomy().done()
                 .liveData().done()
+                .connector().done()
                 .build();
     }
 }
@@ -114,6 +165,7 @@ public ZequentClient zequentClient(
             .remoteControl().host(host).port(port).done()
             .missionAutonomy().done()
             .liveData().done()
+            .connector().host("localhost").port(8010).done()
             .build();
 }
 ```
@@ -156,7 +208,7 @@ mvn deploy
 
 This SDK provides:
 - `ZequentClient` - Main client interface
-- Service interfaces (RemoteControl, MissionAutonomy, LiveData)
+- Service interfaces (RemoteControl, MissionAutonomy, LiveData, Connector)
 - Request/Response models
 - Auto-configuration via CDI (Quarkus)
 - gRPC channel management
@@ -174,9 +226,9 @@ The SDK is compiled with Java 21 for maximum customer compatibility. If your app
 ## ✅ Features
 
 ✅ **Framework Agnostic** - Works with Spring Boot, Quarkus, Micronaut, etc.
-✅ **Sensible Defaults** - Works out-of-the-box (localhost:8002/8004/8003)
+✅ **Sensible Defaults** - Works out-of-the-box (localhost:8002/8004/8003/8010)
 ✅ **Property-Based Config** - Override via `application.properties` (optional)
-✅ **Multi-Service Support** - Remote Control, Mission Autonomy, Live Data
+✅ **Multi-Service Support** - Remote Control, Mission Autonomy, Live Data, Connector
 ✅ **Built-in Resilience** - Retry, Circuit Breaker, Timeouts
 ✅ **Load Balancing** - Round-robin, Least-requests
 ✅ **Service Discovery** - Stork support for Kubernetes

@@ -5,7 +5,8 @@ import com.zqnt.sdk.client.remotecontrol.domains.ManualControlInput;
 import com.zqnt.sdk.client.remotecontrol.domains.RemoteControlResponse;
 import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtobufHelpers;
-import com.zqnt.utils.remotecontrol.proto.RemoteControlManualControlInputRequest;
+import com.zqnt.utils.devicecontrol.proto.CommandResponse;
+import com.zqnt.utils.devicecontrol.proto.ManualControlInputCommandRequest;
 import io.grpc.stub.StreamObserver;
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,8 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class ManualControlInputSessionImpl implements ManualControlInputSession {
 
-    private final StreamObserver<RemoteControlManualControlInputRequest> requestObserver;
-    private final CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> responseFuture;
+    private final StreamObserver<ManualControlInputCommandRequest> requestObserver;
+    private final CompletableFuture<CommandResponse> responseFuture;
     private final String sn;
     private final int requestTimeoutSeconds;
     private final AtomicBoolean completed = new AtomicBoolean(false);
@@ -32,8 +33,8 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
     public ManualControlInputSessionImpl(
             String sn,
             int requestTimeoutSeconds,
-            CompletableFuture<com.zqnt.utils.remotecontrol.proto.RemoteControlResponse> responseFuture,
-            StreamObserver<RemoteControlManualControlInputRequest> requestObserver) {
+            CompletableFuture<CommandResponse> responseFuture,
+            StreamObserver<ManualControlInputCommandRequest> requestObserver) {
         this.sn = sn;
         this.requestTimeoutSeconds = requestTimeoutSeconds;
         this.responseFuture = responseFuture;
@@ -61,7 +62,7 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
         log.debug("Sending manual control input for SN: {}, roll={}, pitch={}, yaw={}, throttle={}, gimbalPitch={}",
                 sn, input.getRoll(), input.getPitch(), input.getYaw(), input.getThrottle(), input.getGimbalPitch());
 
-        var builder = com.zqnt.utils.common.proto.ManualControlInput.newBuilder();
+        var builder = com.zqnt.utils.devicecontrol.proto.ManualControlInput.newBuilder();
 
         if (input.getRoll() != null) {
             builder.setRoll(input.getRoll());
@@ -79,7 +80,7 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
             builder.setGimbalPitch(input.getGimbalPitch());
         }
 
-        var protoRequest = RemoteControlManualControlInputRequest.newBuilder()
+        var protoRequest = ManualControlInputCommandRequest.newBuilder()
                 .setBase(buildBase())
                 .setRequest(builder.build())
                 .build();
@@ -153,13 +154,14 @@ public class ManualControlInputSessionImpl implements ManualControlInputSession 
                 .build();
     }
 
-    private RemoteControlResponse toResponse(com.zqnt.utils.remotecontrol.proto.RemoteControlResponse proto) {
+    private RemoteControlResponse toResponse(CommandResponse proto) {
+        var meta = proto.getMeta();
         return RemoteControlResponse.builder()
                 .success(!proto.getHasErrors())
                 .sn(sn)
-                .tid(proto.getTid())
-                .message(proto.hasResponseMessage() ? proto.getResponseMessage() : null)
-                .assetId(proto.hasAssetId() ? proto.getAssetId() : null)
+                .tid(meta.getTid())
+                .message(meta.hasResponseMessage() ? meta.getResponseMessage() : null)
+                .assetId(meta.hasAssetId() ? meta.getAssetId() : null)
                 .error(proto.hasError() ? RemoteControlResponse.ErrorInfo.builder()
                         .errorCode(proto.getError().getErrorCode().name())
                         .errorMessage(proto.getError().getErrorMessage())

@@ -66,7 +66,7 @@ jobs:
           mvn versions:set -DnewVersion=${{ steps.version.outputs.version }}
 
       - name: Publish preview to GitHub Packages
-        run: mvn -B deploy --settings .github/settings.xml
+        run: mvn -B -Prelease deploy --settings .github/settings.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}

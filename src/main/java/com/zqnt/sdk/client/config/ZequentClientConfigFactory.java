@@ -39,12 +39,19 @@ public class ZequentClientConfigFactory {
                 9093
         );
 
+        ServiceConfig connectorConfig = createServiceConfig(
+                "connector",
+                properties.connectorService(),
+                8010
+        );
+
         var resilience = properties.resilience();
 
         return GrpcClientConfig.builder()
                 .remoteControlConfig(remoteControlConfig)
                 .missionAutonomyConfig(missionAutonomyConfig)
                 .liveDataConfig(liveDataConfig)
+                .connectorConfig(connectorConfig)
                 .maxRetryAttempts(resilience.maxRetryAttempts())
                 .retryDelayMillis(resilience.retryDelayMillis())
                 .circuitBreakerFailureThreshold(resilience.circuitBreakerFailureThreshold())
