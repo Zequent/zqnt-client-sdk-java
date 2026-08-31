@@ -456,6 +456,45 @@ public class MissionAutonomyImpl implements MissionAutonomy {
     }
 
     @Override
+    public CompletableFuture<MissionResponse> uploadMissionNfzZones(
+            String missionId, List<MissionZoneDTO> zones, boolean replaceExisting) {
+        log.info("Uploading mission NFZ zones: missionId={}, count={}, replaceExisting={}",
+                missionId, zones != null ? zones.size() : 0, replaceExisting);
+
+        var protoRequest = mapUploadMissionNfzZonesRequest(
+                buildBase(), missionId, zones, replaceExisting);
+
+        return executeAsync(() -> futureStub.uploadMissionNfzZones(protoRequest))
+                .thenApply(this::toMissionResponse);
+    }
+
+    static UploadMissionNfzZonesRequest mapUploadMissionNfzZonesRequest(
+            RequestBase base, String missionId, List<MissionZoneDTO> zones, boolean replaceExisting) {
+        if (missionId == null || missionId.isBlank()) {
+            throw new IllegalArgumentException("missionId must not be null or blank");
+        }
+        if (zones == null) {
+            throw new IllegalArgumentException("zones must not be null");
+        }
+        for (int index = 0; index < zones.size(); index++) {
+            MissionZoneDTO zone = zones.get(index);
+            if (zone == null) {
+                throw new IllegalArgumentException("zones[" + index + "] must not be null");
+            }
+            zone.validate();
+        }
+
+        return UploadMissionNfzZonesRequest.newBuilder()
+                .setBase(base)
+                .setMissionId(missionId)
+                .addAllZones(zones.stream()
+                        .map(MissionAutonomyImpl::mapMissionZoneDtoToProto)
+                        .toList())
+                .setReplaceExisting(replaceExisting)
+                .build();
+    }
+
+    @Override
     public CompletableFuture<TaskResponse> createTask(TaskDTO taskDTO) {
         log.info("Creating task: name={}", taskDTO.getName());
         taskDTO.validate();
@@ -681,6 +720,12 @@ public class MissionAutonomyImpl implements MissionAutonomy {
                     schedulerDTO.getExecutionParametersJson(), com.google.protobuf.Struct.newBuilder()));
         }
         if (schedulerDTO.getAutoStart() != null) schedulerBuilder.setAutoStart(schedulerDTO.getAutoStart());
+        if (schedulerDTO.getCreatedAt() != null) {
+            schedulerBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(schedulerDTO.getCreatedAt()));
+        }
+        if (schedulerDTO.getModifiedAt() != null) {
+            schedulerBuilder.setModifiedAt(ProtobufHelpers.toTimestamp(schedulerDTO.getModifiedAt()));
+        }
         if (schedulerDTO.getCreatedAt() != null) {
             schedulerBuilder.setCreatedAt(ProtobufHelpers.toTimestamp(schedulerDTO.getCreatedAt()));
         }
